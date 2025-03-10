@@ -88,7 +88,8 @@ if st.session_state.logged_in:
                 try:
                     blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                     blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-                    image_url = blob.public_url
+                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
+
 
                     db.collection("writing_samples").add({
                         "school": school_name,
@@ -144,7 +145,12 @@ if st.session_state.logged_in:
 image_urls = []
 for doc in image_docs:
     data = doc.to_dict()
-    st.write(f"📄 Firestore Document Data: {data}")  # ✅ Debug output
+    # ✅ Display only images, remove unnecessary text output
+if "image_url" in data:
+    st.image(data["image_url"], width=200)
+else:
+    st.warning(f"⚠️ Image missing for {data['filename']}")
+
     if "image_url" in data:
         image_urls.append(data["image_url"])
     else:
