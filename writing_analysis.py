@@ -101,10 +101,8 @@ if st.session_state.logged_in:
         "filename": uploaded_file.name
     })
     st.success(f"{len(uploaded_files)} files uploaded successfully.")
-except Exception as e:
-    st.error(f"Firestore upload failed: {str(e)}")
-
-
+except Exception as e:  # ✅ Correctly indented
+    st.error(f"Firestore upload failed: {str(e)}")  # ✅ Indented under except
 
         # === DISPLAY + DELETE FILES === #
         st.subheader("Uploaded Samples")
