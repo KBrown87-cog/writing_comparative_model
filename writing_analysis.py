@@ -10,15 +10,24 @@ from firebase_admin import credentials, firestore, storage
 
 # === FIREBASE SETUP === #
 import json
-import io
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
 
 # Load Firebase credentials from Streamlit Secrets
-firebase_config_json = st.secrets["FIREBASE_KEY"]  # 🔹 Get the JSON as a string
-firebase_config_dict = json.loads(firebase_config_json)  # 🔹 Convert string to dictionary
+firebase_config = {
+    "type": st.secrets["FIREBASE"]["TYPE"],
+    "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
+    "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
+    "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),  # Fix formatting
+    "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
+    "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
+    "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
+    "token_uri": st.secrets["FIREBASE"]["TOKEN_URI"],
+    "auth_provider_x509_cert_url": st.secrets["FIREBASE"]["AUTH_PROVIDER_X509_CERT_URL"],
+    "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
+}
 
-# Convert dictionary back to a file-like object (Firebase requires this format)
-cred = credentials.Certificate(io.StringIO(json.dumps(firebase_config_dict)))
-
+cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'writing-comparison.firebasestorage.app'  # ✅ Ensure this matches your actual Firebase bucket
 })
