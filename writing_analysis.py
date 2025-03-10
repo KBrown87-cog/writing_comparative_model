@@ -140,72 +140,78 @@ if st.session_state.logged_in:
         except Exception as e:
             st.error(f"❌ Firestore Query Failed: {str(e)}")
 
-        # === FETCH REMAINING IMAGES FOR COMPARISON === #
-        image_urls = [doc.to_dict()["image_url"] for doc in image_docs]
+ # === FETCH REMAINING IMAGES FOR COMPARISON === #
+image_urls = []
+for doc in image_docs:
+    data = doc.to_dict()
+    st.write(f"📄 Firestore Document Data: {data}")  # ✅ Debug output
+    if "image_url" in data:
+        image_urls.append(data["image_url"])
+    else:
+        st.warning(f"⚠️ Missing 'image_url' field in document: {data}")
 
-        if len(image_urls) >= 2:
-            st.subheader("Vote for Your Favorite Image")
-            st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
+# ✅ Ensure this runs after all documents are processed
+if len(image_urls) >= 2:
+    st.subheader("Vote for Your Favorite Image")
+    st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
 
-            if not st.session_state.pairings:
-                st.session_state.pairings = list(itertools.combinations(image_urls, 2))
-                random.shuffle(st.session_state.pairings)
+    if "pairings" not in st.session_state or not st.session_state.pairings:
+        st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+        random.shuffle(st.session_state.pairings)
 
-            def get_next_pair():
-                if st.session_state.pairings:
-                    return sorted(
-                        st.session_state.pairings,
-                        key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
-                    )[0]
-                else:
-                    return None
+    def get_next_pair():
+        if st.session_state.pairings:
+            return sorted(
+                st.session_state.pairings,
+                key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
+            )[0]
+        return None  # ✅ Prevents NoneType errors
 
-            next_pair = get_next_pair()
+    next_pair = get_next_pair()
 
-            if next_pair:
-                img1, img2 = next_pair
-                col1, col2 = st.columns(2)
+    if next_pair:
+        img1, img2 = next_pair
+        col1, col2 = st.columns(2)
 
-                with col1:
-                    st.image(img1, use_container_width=True)
-                    if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                        st.session_state.comparisons.append((img1, img2, img1))
-                        st.session_state.pairings.remove((img1, img2))
-                        st.rerun()
+        with col1:
+            st.image(img1, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                st.session_state.comparisons.append((img1, img2, img1))
+                st.session_state.pairings.remove((img1, img2))
+                st.rerun()
 
-                with col2:
-                    st.image(img2, use_container_width=True)
-                    if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                        st.session_state.comparisons.append((img1, img2, img2))
-                        st.session_state.pairings.remove((img1, img2))
-                        st.rerun()
+        with col2:
+            st.image(img2, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                st.session_state.comparisons.append((img1, img2, img2))
+                st.session_state.pairings.remove((img1, img2))
+                st.rerun()
 
+# === RANKING SECTION === #
+def bradley_terry_log_likelihood(scores, comparisons):
+    likelihood = 0
+    for item1, item2, winner in comparisons:
+        s1, s2 = scores[item1], scores[item2]
+        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
+        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
+        likelihood += np.log(p1 if winner == item1 else p2)
+    return -likelihood
 
-    # === RANKING SECTION === #
-    def bradley_terry_log_likelihood(scores, comparisons):
-        likelihood = 0
-        for item1, item2, winner in comparisons:
-            s1, s2 = scores[item1], scores[item2]
-            p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
-            p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
-            likelihood += np.log(p1 if winner == item1 else p2)
-        return -likelihood
+if st.session_state.comparisons:
+    sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
+    initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
 
-    if st.session_state.comparisons:
-        sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
-        initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
+    result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
+                      list(initial_scores.values()), method='BFGS')
 
-        result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
-                          list(initial_scores.values()), method='BFGS')
+    final_scores = dict(zip(sample_names, result.x))
+    ranked_samples = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
 
-        final_scores = dict(zip(sample_names, result.x))
-        ranked_samples = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
+    df = pd.DataFrame(ranked_samples, columns=["Writing Sample", "Score"])
+    wts_cutoff = np.percentile(df["Score"], 25)
+    gds_cutoff = np.percentile(df["Score"], 75)
+    df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
 
-        df = pd.DataFrame(ranked_samples, columns=["Writing Sample", "Score"])
-        wts_cutoff = np.percentile(df["Score"], 25)
-        gds_cutoff = np.percentile(df["Score"], 75)
-        df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
-
-        st.subheader("Ranked Writing Samples")
-        st.dataframe(df)
-        st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
+    st.subheader("Ranked Writing Samples")
+    st.dataframe(df)
+    st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
