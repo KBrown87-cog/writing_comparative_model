@@ -93,6 +93,7 @@ if st.session_state.logged_in:
                 blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                 blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                 image_url = blob.public_url
+    try:
     db.collection("writing_samples").add({
         "school": school_name,
         "year_group": year_group,
