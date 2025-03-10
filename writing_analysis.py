@@ -76,7 +76,7 @@ if login_button:
     else:
         st.sidebar.error("Invalid credentials")
 
-# === AFTER LOGIN === #
+# # === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
@@ -90,24 +90,25 @@ if st.session_state.logged_in:
 
         if uploaded_files:
             for uploaded_file in uploaded_files:
-               try:
-    # ✅ Upload file to Firebase Storage
-    blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
-    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-    image_url = blob.public_url
+                try:
+                    # ✅ Upload file to Firebase Storage
+                    blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
+                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+                    image_url = blob.public_url
 
-    # ✅ Store metadata in Firestore
-    db.collection("writing_samples").add({
-        "school": school_name,
-        "year_group": year_group,
-        "image_url": image_url,
-        "filename": uploaded_file.name
-    })
+                    # ✅ Store metadata in Firestore
+                    db.collection("writing_samples").add({
+                        "school": school_name,
+                        "year_group": year_group,
+                        "image_url": image_url,
+                        "filename": uploaded_file.name
+                    })
 
-    st.success(f"{len(uploaded_files)} files uploaded successfully.")
+                    st.success(f"{len(uploaded_files)} files uploaded successfully.")
 
-except Exception as e:  # ✅ Correctly indented
-    st.error(f"Firestore upload failed: {str(e)}")  # ✅ Properly indented inside except
+                except Exception as e:  # ✅ Correctly indented
+                    st.error(f"Firestore upload failed: {str(e)}")  # ✅ Properly indented inside except
+
 
         # === DISPLAY + DELETE FILES === #
         st.subheader("Uploaded Samples")
