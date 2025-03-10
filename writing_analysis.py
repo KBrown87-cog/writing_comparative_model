@@ -109,7 +109,6 @@ if st.session_state.logged_in:
                 except Exception as e:  # ✅ Correctly indented
                     st.error(f"❌ Upload Failed: {str(e)}")  # ✅ Displays error properly
 
-
 # === DISPLAY + DELETE FILES === #
 st.subheader("Uploaded Samples")
 
@@ -126,8 +125,14 @@ try:
     else:
         st.success(f"✅ Found {len(image_docs)} images in Firestore.")
 
+        # ✅ Loop through images only if found
+        for doc in image_docs:
+            data = doc.to_dict()
+            st.image(data["image_url"], width=200, caption=data["filename"])
+
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
 
         for doc in image_docs:
             data = doc.to_dict()
