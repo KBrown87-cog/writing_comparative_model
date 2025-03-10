@@ -110,10 +110,24 @@ if st.session_state.logged_in:
                     st.error(f"❌ Upload Failed: {str(e)}")  # ✅ Displays error properly
 
 
-        # === DISPLAY + DELETE FILES === #
-        st.subheader("Uploaded Samples")
-        docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
-        image_docs = [doc for doc in docs]
+# === DISPLAY + DELETE FILES === #
+st.subheader("Uploaded Samples")
+
+try:
+    docs = db.collection("writing_samples")\
+            .where("school", "==", school_name)\
+            .where("year_group", "==", year_group)\
+            .stream()
+
+    image_docs = [doc for doc in docs]
+
+    if not image_docs:
+        st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+    else:
+        st.success(f"✅ Found {len(image_docs)} images in Firestore.")
+
+except Exception as e:
+    st.error(f"❌ Firestore Query Failed: {str(e)}")
 
         for doc in image_docs:
             data = doc.to_dict()
