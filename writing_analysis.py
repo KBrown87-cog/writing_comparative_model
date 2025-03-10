@@ -7,19 +7,16 @@ import itertools
 from scipy.optimize import minimize
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
-
-# === FIREBASE SETUP === #
 import json
 import os
 
-# ✅ Prevent duplicate initialization
+# ✅ Prevent duplicate Firebase initialization
 if not firebase_admin._apps:
-    # Load Firebase credentials from Streamlit Secrets
     firebase_config = {
         "type": st.secrets["FIREBASE"]["TYPE"],
         "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
         "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
-        "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),  # Fix formatting
+        "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),
         "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
         "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
         "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
@@ -28,12 +25,10 @@ if not firebase_admin._apps:
         "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
     }
 
-    # Save credentials as a temporary JSON file
-    firebase_credentials_path = "/tmp/firebase_credentials.json"  
+    firebase_credentials_path = "/tmp/firebase_credentials.json"
     with open(firebase_credentials_path, "w") as json_file:
         json.dump(firebase_config, json_file)
 
-    # Load Firebase credentials from the temporary JSON file
     cred = credentials.Certificate(firebase_credentials_path)
     firebase_admin.initialize_app(cred, {
         'storageBucket': 'writing-comparison.firebasestorage.app'
@@ -65,7 +60,7 @@ if "logged_in" not in st.session_state:
 
 # === SIDEBAR LOGIN === #
 school_name = st.sidebar.text_input("Enter School Name")
-password = st.sidebar.text_input("Enter Password", type="password")
+password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
 login_button = st.sidebar.button("Login")
 
 if login_button:
@@ -91,12 +86,10 @@ if st.session_state.logged_in:
         if uploaded_files:
             for uploaded_file in uploaded_files:
                 try:
-                    # ✅ Upload file to Firebase Storage
                     blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                     blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                     image_url = blob.public_url
 
-                    # ✅ Store metadata in Firestore
                     db.collection("writing_samples").add({
                         "school": school_name,
                         "year_group": year_group,
@@ -106,54 +99,86 @@ if st.session_state.logged_in:
 
                     st.success(f"{len(uploaded_files)} files uploaded successfully.")
 
-                except Exception as e:  # ✅ Correctly indented
-                    st.error(f"❌ Upload Failed: {str(e)}")  # ✅ Displays error properly
+                except Exception as e:
+                    st.error(f"❌ Upload Failed: {str(e)}")
 
-# === DISPLAY + DELETE FILES === #
-st.subheader("Uploaded Samples")
+        # === DISPLAY + DELETE FILES === #
+        st.subheader("Uploaded Samples")
+        try:
+            docs = db.collection("writing_samples")\
+                    .where("school", "==", school_name)\
+                    .where("year_group", "==", year_group)\
+                    .stream()
 
-try:
-    docs = db.collection("writing_samples")\
-            .where("school", "==", school_name)\
-            .where("year_group", "==", year_group)\
-            .stream()
+            image_docs = [doc for doc in docs]
 
-    image_docs = [doc for doc in docs]
+            if not image_docs:
+                st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+            else:
+                st.success(f"✅ Found {len(image_docs)} images in Firestore.")
 
-    if not image_docs:
-        st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
-    else:
-        st.success(f"✅ Found {len(image_docs)} images in Firestore.")
+                for doc in image_docs:
+                    data = doc.to_dict()
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.image(data["image_url"], width=200, caption=data["filename"])
+                    
+                    if school_name == "adminkbrown":
+                        with col2:
+                            if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):
+                                try:
+                                    blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
+                                    blob.delete()
+                                    db.collection("writing_samples").document(doc.id).delete()
 
-        # ✅ Loop through images only if found
-        for doc in image_docs:
-            data = doc.to_dict()
-            col1, col2 = st.columns([3, 1])  # Display image and delete button in separate columns
-            with col1:
-                st.image(data["image_url"], width=200, caption=data["filename"])
-            
-            # ✅ Only Admin can delete images
-            if school_name == "adminkbrown":
+                                    st.success(f"Deleted {data['filename']}")
+                                    st.rerun()
+
+                                except Exception as e:
+                                    st.error(f"❌ Deletion Failed: {str(e)}")
+
+        except Exception as e:
+            st.error(f"❌ Firestore Query Failed: {str(e)}")
+
+        # === FETCH REMAINING IMAGES FOR COMPARISON === #
+        image_urls = [doc.to_dict()["image_url"] for doc in image_docs]
+
+        if len(image_urls) >= 2:
+            st.subheader("Vote for Your Favorite Image")
+            st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
+
+            if not st.session_state.pairings:
+                st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+                random.shuffle(st.session_state.pairings)
+
+            def get_next_pair():
+                if st.session_state.pairings:
+                    return sorted(
+                        st.session_state.pairings,
+                        key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
+                    )[0]
+                else:
+                    return None
+
+            next_pair = get_next_pair()
+
+            if next_pair:
+                img1, img2 = next_pair
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.image(img1, use_container_width=True)
+                    if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                        st.session_state.comparisons.append((img1, img2, img1))
+                        st.session_state.pairings.remove((img1, img2))
+                        st.rerun()
+
                 with col2:
-                    if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):  # 🔹 Ensures unique key
-                        try:
-                            # ✅ Delete from Firebase Storage
-                            blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                            blob.delete()
-
-                            # ✅ Delete from Firestore
-                            db.collection("writing_samples").document(doc.id).delete()
-
-                            st.success(f"Deleted {data['filename']}")
-                            st.rerun()  # Refresh the page after deletion
-
-                        except Exception as e:
-                            st.error(f"❌ Deletion Failed: {str(e)}")
-
-except Exception as e:
-    st.error(f"❌ Firestore Query Failed: {str(e)}")
-
-
+                    st.image(img2, use_container_width=True)
+                    if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                        st.session_state.comparisons.append((img1, img2, img2))
+                        st.session_state.pairings.remove((img1, img2))
+                        st.rerun()
 
 
     # === RANKING SECTION === #
