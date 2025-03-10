@@ -9,12 +9,23 @@ import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
 # === FIREBASE SETUP === #
-cred = credentials.Certificate("writing_comparison-firebase-adminsdk-fbsvc-204fe8b59b.json")  # ✅ Make sure this path is correct
+import json
+import io
+
+# Load Firebase credentials from Streamlit Secrets
+firebase_config_json = st.secrets["FIREBASE_KEY"]  # 🔹 Get the JSON as a string
+firebase_config_dict = json.loads(firebase_config_json)  # 🔹 Convert string to dictionary
+
+# Convert dictionary back to a file-like object (Firebase requires this format)
+cred = credentials.Certificate(io.StringIO(json.dumps(firebase_config_dict)))
+
 firebase_admin.initialize_app(cred, {
-    'storageBucket': 'writing-comparison.firebasestorage.app'  # ✅ Replace with your Firebase bucket
+    'storageBucket': 'writing-comparison.firebasestorage.app'  # ✅ Ensure this matches your actual Firebase bucket
 })
+
 db = firestore.client()
 bucket = storage.bucket()
+
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
