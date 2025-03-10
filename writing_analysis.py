@@ -128,10 +128,31 @@ try:
         # ✅ Loop through images only if found
         for doc in image_docs:
             data = doc.to_dict()
-            st.image(data["image_url"], width=200, caption=data["filename"])
+            col1, col2 = st.columns([3, 1])  # Display image and delete button in separate columns
+            with col1:
+                st.image(data["image_url"], width=200, caption=data["filename"])
+            
+            # ✅ Only Admin can delete images
+            if school_name == "adminkbrown":
+                with col2:
+                    if st.button(f"🗑 Delete", key=f"delete_{data['filename']}"):
+                        try:
+                            # ✅ Delete from Firebase Storage
+                            blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
+                            blob.delete()
+
+                            # ✅ Delete from Firestore
+                            db.collection("writing_samples").document(doc.id).delete()
+
+                            st.success(f"Deleted {data['filename']}")
+                            st.rerun()  # Refresh the page after deletion
+
+                        except Exception as e:
+                            st.error(f"❌ Deletion Failed: {str(e)}")
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
 
 
     # === RANKING SECTION === #
