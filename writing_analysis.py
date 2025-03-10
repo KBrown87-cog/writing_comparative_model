@@ -93,13 +93,16 @@ if st.session_state.logged_in:
                 blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                 blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                 image_url = blob.public_url
-                db.collection("writing_samples").add({
-                    "school": school_name,
-                    "year_group": year_group,
-                    "image_url": image_url,
-                    "filename": uploaded_file.name  # store filename for later deletion
-                })
-            st.success(f"{len(uploaded_files)} files uploaded!")
+    db.collection("writing_samples").add({
+        "school": school_name,
+        "year_group": year_group,
+        "image_url": image_url,
+        "filename": uploaded_file.name
+    })
+    st.success(f"{len(uploaded_files)} files uploaded successfully.")
+except Exception as e:
+    st.error(f"Firestore upload failed: {str(e)}")
+
 
         # === DISPLAY + DELETE FILES === #
         st.subheader("Uploaded Samples")
