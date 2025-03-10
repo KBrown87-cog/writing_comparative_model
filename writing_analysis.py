@@ -134,54 +134,6 @@ except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
 
-        for doc in image_docs:
-            data = doc.to_dict()
-            st.image(data["image_url"], width=200, caption=data["filename"])
-            if school_name == "adminkbrown":
-                if st.button(f"🗑 Delete {data['filename']}", key=f"delete_{data['filename']}"):
-                    # Delete from Firebase Storage
-                    blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                    blob.delete()
-                    # Delete from Firestore
-                    db.collection("writing_samples").document(doc.id).delete()
-                    st.success(f"Deleted {data['filename']}")
-                    st.rerun()
-
-        # === FETCH REMAINING IMAGES FOR COMPARISON === #
-        docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
-        image_urls = [doc.to_dict()["image_url"] for doc in docs]
-
-        if len(image_urls) >= 2:
-            st.subheader("Vote for Your Favorite Image")
-            st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
-
-            if not st.session_state.pairings:
-                st.session_state.pairings = list(itertools.combinations(image_urls, 2))
-                random.shuffle(st.session_state.pairings)
-
-            def get_next_pair():
-                return sorted(
-                    st.session_state.pairings,
-                    key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
-                )[0]
-
-            img1, img2 = get_next_pair()
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.image(img1, use_container_width=True)
-                if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                    st.session_state.comparisons.append((img1, img2, img1))
-                    st.session_state.pairings.remove((img1, img2))
-                    st.rerun()
-
-            with col2:
-                st.image(img2, use_container_width=True)
-                if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                    st.session_state.comparisons.append((img1, img2, img2))
-                    st.session_state.pairings.remove((img1, img2))
-                    st.rerun()
-
     # === RANKING SECTION === #
     def bradley_terry_log_likelihood(scores, comparisons):
         likelihood = 0
