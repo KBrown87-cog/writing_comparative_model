@@ -14,33 +14,36 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
-# Save the Firebase credentials from Streamlit Secrets to a temporary JSON file
-firebase_config = {
-    "type": st.secrets["FIREBASE"]["TYPE"],
-    "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
-    "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
-    "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),  # Fix formatting
-    "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
-    "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
-    "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
-    "token_uri": st.secrets["FIREBASE"]["TOKEN_URI"],
-    "auth_provider_x509_cert_url": st.secrets["FIREBASE"]["AUTH_PROVIDER_X509_CERT_URL"],
-    "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
-}
+# ✅ Prevent duplicate initialization
+if not firebase_admin._apps:
+    # Load Firebase credentials from Streamlit Secrets
+    firebase_config = {
+        "type": st.secrets["FIREBASE"]["TYPE"],
+        "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
+        "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
+        "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),  # Fix formatting
+        "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
+        "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
+        "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
+        "token_uri": st.secrets["FIREBASE"]["TOKEN_URI"],
+        "auth_provider_x509_cert_url": st.secrets["FIREBASE"]["AUTH_PROVIDER_X509_CERT_URL"],
+        "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
+    }
 
-# Save credentials as a temporary JSON file
-firebase_credentials_path = "/tmp/firebase_credentials.json"  # ✅ Streamlit Cloud allows /tmp/ storage
-with open(firebase_credentials_path, "w") as json_file:
-    json.dump(firebase_config, json_file)
+    # Save credentials as a temporary JSON file (only needed for Firebase Admin SDK)
+    firebase_credentials_path = "/tmp/firebase_credentials.json"  # ✅ Streamlit Cloud allows /tmp/ storage
+    with open(firebase_credentials_path, "w") as json_file:
+        json.dump(firebase_config, json_file)
 
-# Load Firebase credentials from the temporary JSON file
-cred = credentials.Certificate(firebase_credentials_path)
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'writing-comparison.firebasestorage.app'
-})
+    # Load Firebase credentials from the temporary JSON file
+    cred = credentials.Certificate(firebase_credentials_path)
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': 'writing-comparison.firebasestorage.app'
+    })
 
 db = firestore.client()
 bucket = storage.bucket()
+
 
 
 
