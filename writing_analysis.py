@@ -135,7 +135,7 @@ try:
             # ✅ Only Admin can delete images
             if school_name == "adminkbrown":
                 with col2:
-                    if st.button(f"🗑 Delete", key=f"delete_{data['filename']}"):
+                    if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):  # 🔹 Ensures unique key
                         try:
                             # ✅ Delete from Firebase Storage
                             blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
@@ -152,6 +152,7 @@ try:
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
 
 
 
