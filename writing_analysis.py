@@ -11,8 +11,6 @@ from firebase_admin import credentials, firestore, storage
 # === FIREBASE SETUP === #
 import json
 import os
-import firebase_admin
-from firebase_admin import credentials, firestore, storage
 
 # ✅ Prevent duplicate initialization
 if not firebase_admin._apps:
@@ -30,8 +28,8 @@ if not firebase_admin._apps:
         "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
     }
 
-    # Save credentials as a temporary JSON file (only needed for Firebase Admin SDK)
-    firebase_credentials_path = "/tmp/firebase_credentials.json"  # ✅ Streamlit Cloud allows /tmp/ storage
+    # Save credentials as a temporary JSON file
+    firebase_credentials_path = "/tmp/firebase_credentials.json"  
     with open(firebase_credentials_path, "w") as json_file:
         json.dump(firebase_config, json_file)
 
@@ -43,9 +41,6 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 bucket = storage.bucket()
-
-
-
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
@@ -71,98 +66,93 @@ if "logged_in" not in st.session_state:
 # === SIDEBAR LOGIN === #
 school_name = st.sidebar.text_input("Enter School Name")
 password = st.sidebar.text_input("Enter Password", type="password")
-year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 login_button = st.sidebar.button("Login")
 
 if login_button:
     if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
         st.session_state.logged_in = True
         st.session_state.school_name = school_name
-        st.session_state.year_group = year_group
-        st.sidebar.success(f"Logged in as {school_name}, {year_group}")
+        st.sidebar.success(f"Logged in as {school_name}")
     else:
         st.sidebar.error("Invalid credentials")
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
-    year_group = st.session_state.year_group
-    st.sidebar.header("Upload Writing Samples")
+    st.sidebar.header("Select Year Group")
+    year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
+    
+    if year_group:
+        st.session_state.year_group = year_group
+        st.sidebar.header("Upload Writing Samples")
 
-    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
-            blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-            image_url = blob.public_url
-            db.collection("writing_samples").add({
-                "school": school_name,
-                "year_group": year_group,
-                "image_url": image_url,
-                "filename": uploaded_file.name  # store filename for later deletion
-            })
-        st.success(f"{len(uploaded_files)} files uploaded!")
+        if uploaded_files:
+            for uploaded_file in uploaded_files:
+                blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
+                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+                image_url = blob.public_url
+                db.collection("writing_samples").add({
+                    "school": school_name,
+                    "year_group": year_group,
+                    "image_url": image_url,
+                    "filename": uploaded_file.name  # store filename for later deletion
+                })
+            st.success(f"{len(uploaded_files)} files uploaded!")
 
-    # === DISPLAY + DELETE FILES === #
-    st.subheader("Uploaded Samples")
-    docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
-    image_docs = [doc for doc in docs]
+        # === DISPLAY + DELETE FILES === #
+        st.subheader("Uploaded Samples")
+        docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
+        image_docs = [doc for doc in docs]
 
-    for doc in image_docs:
-        data = doc.to_dict()
-        st.image(data["image_url"], width=200, caption=data["filename"])
-        if school_name == "adminkbrown":
-            if st.button(f"🗑 Delete {data['filename']}", key=f"delete_{data['filename']}"):
-                # Delete from Firebase Storage
-                blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                blob.delete()
-                # Delete from Firestore
-                db.collection("writing_samples").document(doc.id).delete()
-                st.success(f"Deleted {data['filename']}")
-                st.rerun()
+        for doc in image_docs:
+            data = doc.to_dict()
+            st.image(data["image_url"], width=200, caption=data["filename"])
+            if school_name == "adminkbrown":
+                if st.button(f"🗑 Delete {data['filename']}", key=f"delete_{data['filename']}"):
+                    # Delete from Firebase Storage
+                    blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
+                    blob.delete()
+                    # Delete from Firestore
+                    db.collection("writing_samples").document(doc.id).delete()
+                    st.success(f"Deleted {data['filename']}")
+                    st.rerun()
 
-    # === FETCH REMAINING IMAGES FOR COMPARISON === #
-    docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
-    image_urls = [doc.to_dict()["image_url"] for doc in docs]
+        # === FETCH REMAINING IMAGES FOR COMPARISON === #
+        docs = db.collection("writing_samples").where("school", "==", school_name).where("year_group", "==", year_group).stream()
+        image_urls = [doc.to_dict()["image_url"] for doc in docs]
 
-    if len(image_urls) >= 2:
-        st.subheader("Vote for Your Favorite Image")
-        st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
+        if len(image_urls) >= 2:
+            st.subheader("Vote for Your Favorite Image")
+            st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
 
-        if not st.session_state.pairings:
-            st.session_state.pairings = list(itertools.combinations(image_urls, 2))
-            random.shuffle(st.session_state.pairings)
+            if not st.session_state.pairings:
+                st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+                random.shuffle(st.session_state.pairings)
 
-        def get_next_pair():
-            return sorted(
-                st.session_state.pairings,
-                key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
-            )[0]
+            def get_next_pair():
+                return sorted(
+                    st.session_state.pairings,
+                    key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
+                )[0]
 
-        img1, img2 = get_next_pair()
-        col1, col2 = st.columns(2)
+            img1, img2 = get_next_pair()
+            col1, col2 = st.columns(2)
 
-        with col1:
-            st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                st.session_state.comparisons.append((img1, img2, img1))
-                st.session_state.image_counts[img1] = st.session_state.image_counts.get(img1, 0) + 1
-                st.session_state.image_counts[img2] = st.session_state.image_counts.get(img2, 0) + 1
-                st.session_state.scores[img1] = st.session_state.scores.get(img1, 0) + 1
-                st.session_state.pairings.remove((img1, img2))
-                st.rerun()
+            with col1:
+                st.image(img1, use_container_width=True)
+                if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                    st.session_state.comparisons.append((img1, img2, img1))
+                    st.session_state.pairings.remove((img1, img2))
+                    st.rerun()
 
-        with col2:
-            st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                st.session_state.comparisons.append((img1, img2, img2))
-                st.session_state.image_counts[img1] = st.session_state.image_counts.get(img1, 0) + 1
-                st.session_state.image_counts[img2] = st.session_state.image_counts.get(img2, 0) + 1
-                st.session_state.scores[img2] = st.session_state.scores.get(img2, 0) + 1
-                st.session_state.pairings.remove((img1, img2))
-                st.rerun()
-
+            with col2:
+                st.image(img2, use_container_width=True)
+                if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                    st.session_state.comparisons.append((img1, img2, img2))
+                    st.session_state.pairings.remove((img1, img2))
+                    st.rerun()
 
     # === RANKING SECTION === #
     def bradley_terry_log_likelihood(scores, comparisons):
