@@ -76,12 +76,12 @@ if login_button:
     else:
         st.sidebar.error("Invalid credentials")
 
-# # === AFTER LOGIN === #
+# === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
-    
+
     if year_group:
         st.session_state.year_group = year_group
         st.sidebar.header("Upload Writing Samples")
@@ -107,7 +107,7 @@ if st.session_state.logged_in:
                     st.success(f"{len(uploaded_files)} files uploaded successfully.")
 
                 except Exception as e:  # ✅ Correctly indented
-                    st.error(f"Firestore upload failed: {str(e)}")  # ✅ Properly indented inside except
+                    st.error(f"❌ Upload Failed: {str(e)}")  # ✅ Displays error properly
 
 
         # === DISPLAY + DELETE FILES === #
