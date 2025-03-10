@@ -10,10 +10,11 @@ from firebase_admin import credentials, firestore, storage
 
 # === FIREBASE SETUP === #
 import json
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
 
-# Load Firebase credentials from Streamlit Secrets
+# Save the Firebase credentials from Streamlit Secrets to a temporary JSON file
 firebase_config = {
     "type": st.secrets["FIREBASE"]["TYPE"],
     "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
@@ -27,13 +28,20 @@ firebase_config = {
     "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
 }
 
-cred = credentials.Certificate(firebase_config)
+# Save credentials as a temporary JSON file
+firebase_credentials_path = "/tmp/firebase_credentials.json"  # ✅ Streamlit Cloud allows /tmp/ storage
+with open(firebase_credentials_path, "w") as json_file:
+    json.dump(firebase_config, json_file)
+
+# Load Firebase credentials from the temporary JSON file
+cred = credentials.Certificate(firebase_credentials_path)
 firebase_admin.initialize_app(cred, {
-    'storageBucket': 'writing-comparison.firebasestorage.app'  # ✅ Ensure this matches your actual Firebase bucket
+    'storageBucket': 'writing-comparison.firebasestorage.app'
 })
 
 db = firestore.client()
 bucket = storage.bucket()
+
 
 
 # === STREAMLIT PAGE SETUP === #
