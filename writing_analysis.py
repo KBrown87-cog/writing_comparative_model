@@ -132,14 +132,36 @@ if st.session_state.logged_in:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
+# ✅ Fetch images from Firestore to compare
+image_urls = []
+try:
+    docs = db.collection("writing_samples")\
+             .where("school", "==", school_name)\
+             .where("year_group", "==", year_group)\
+             .stream()
+
+    for doc in docs:
+        data = doc.to_dict()
+        if "image_url" in data:
+            image_urls.append(data["image_url"])  # ✅ Collect valid image URLs
+
+except Exception as e:
+    st.error(f"❌ Firestore Query Failed: {str(e)}")
+
+# ✅ Prevent error if no images exist
+if not image_urls:
+    st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
+    st.stop()  # ✅ Stops execution to prevent errors
+
 if len(image_urls) >= 2:
     st.subheader("Vote for Your Favorite Image")
 
-    # ✅ Get a pair of images for voting
+    # ✅ Ensure that pairings are reset if they are empty
     if "pairings" not in st.session_state or not st.session_state.pairings:
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
 
+    # ✅ Ensure a new pair of images always appears for voting
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
