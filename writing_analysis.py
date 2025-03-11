@@ -192,7 +192,7 @@ elif selected_option == "Home":
             except Exception as e:
                 st.error(f"❌ Failed to record vote: {str(e)}")
 
-        # ✅ Updated voting system
+        # ✅ Show only the next two images for comparison
         next_pair = None
         if st.session_state.pairings:
             next_pair = sorted(
@@ -205,18 +205,19 @@ elif selected_option == "Home":
             col1, col2 = st.columns(2)
 
             with col1:
-                st.image(img1, use_container_width=True)
+                st.image(img1, use_container_width=True)  # ✅ Show image for voting
                 if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
                     st.session_state.pairings.remove((img1, img2))
                     store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
 
             with col2:
-                st.image(img2, use_container_width=True)
+                st.image(img2, use_container_width=True)  # ✅ Show image for voting
                 if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
                     st.session_state.pairings.remove((img1, img2))
                     store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
+
 
 # === RANKING SECTION === #
 def bradley_terry_log_likelihood(scores, comparisons):
