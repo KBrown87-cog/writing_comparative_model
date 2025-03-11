@@ -137,12 +137,12 @@ if st.session_state.logged_in:
         except Exception as e:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# === PAGE: HOME (ONLY SHOW COMPARISON AND RANKINGS) === #
+# === PAGE: HOME (SHOW IMAGE COMPARISON & RANKINGS) === #
 elif selected_option == "Home":
     st.title("Comparative Judgement Writing Assessment")
     st.write("Use the sidebar to navigate.")
 
-    # ✅ Fetch images for comparison (DO NOT SHOW ALL IMAGES)
+    # ✅ Fetch images for comparison
     image_urls = []
     for doc in image_docs:
         data = doc.to_dict()
@@ -192,20 +192,20 @@ elif selected_option == "Home":
             except Exception as e:
                 st.error(f"❌ Failed to record vote: {str(e)}")
 
-        # ✅ Ensure new pair of images appear for voting
-        if "pairings" in st.session_state and st.session_state.pairings:
+        # ✅ Ensure a new pair of images always appear for voting
+        if st.session_state.pairings:
             img1, img2 = st.session_state.pairings.pop(0)  # ✅ Take the first pair from the list
 
             col1, col2 = st.columns(2)
 
             with col1:
-                st.image(img1, use_container_width=True)  # ✅ Show image for voting
+                st.image(img1, use_container_width=True)  # ✅ Show first image for voting
                 if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
                     store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
 
             with col2:
-                st.image(img2, use_container_width=True)  # ✅ Show image for voting
+                st.image(img2, use_container_width=True)  # ✅ Show second image for voting
                 if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
                     store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
@@ -213,6 +213,58 @@ elif selected_option == "Home":
         else:
             st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
 
+    # === RANKING SECTION (Appears Below Comparison) === #
+    if len(image_urls) >= 2:
+        st.subheader("Ranked Writing Samples")
+
+        # ✅ Fetch all stored comparisons from Firestore
+        def fetch_all_comparisons(school_name, year_group):
+            """Retrieves all stored rankings from Firestore and ensures correct format."""
+            try:
+                docs = db.collection("rankings").where("school", "==", school_name)\
+                                               .where("year_group", "==", year_group)\
+                                               .stream()
+                comparisons = []
+                for doc in docs:
+                    data = doc.to_dict()
+                    winner = data.get("winning_image")
+                    loser = data.get("losing_image")
+                    if winner and loser:
+                        comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
+                return comparisons
+            except Exception as e:
+                st.error(f"❌ Failed to fetch comparison data: {str(e)}")
+                return []
+
+        stored_comparisons = fetch_all_comparisons(school_name, year_group)
+
+        if "comparisons" not in st.session_state:
+            st.session_state.comparisons = []
+
+        for comp in stored_comparisons:
+            if comp not in st.session_state.comparisons:
+                st.session_state.comparisons.append(comp)
+
+        # ✅ Prevent ranking if no comparisons exist
+        if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
+            st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
+        else:
+            sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
+            initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
+
+            result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
+                              list(initial_scores.values()), method='BFGS')
+
+            final_scores = dict(zip(sample_names, result.x))
+            ranked_samples = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
+
+            df = pd.DataFrame(ranked_samples, columns=["Writing Sample", "Score"])
+            wts_cutoff = np.percentile(df["Score"], 25)
+            gds_cutoff = np.percentile(df["Score"], 75)
+            df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
+
+            st.dataframe(df)
+            st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
 
 
 # === RANKING SECTION === #
