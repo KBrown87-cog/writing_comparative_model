@@ -267,7 +267,7 @@ def get_image_scores():
 
 # ✅ Fetch all stored comparisons from Firestore for rankings
 def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored rankings from Firestore."""
+    """Retrieves all stored rankings from Firestore and ensures correct format."""
     try:
         docs = db.collection("rankings").where("school", "==", school_name)\
                                        .where("year_group", "==", year_group)\
@@ -278,10 +278,10 @@ def fetch_all_comparisons(school_name, year_group):
             winner = data.get("winning_image")
             loser = data.get("losing_image")
             if winner and loser:
-                comparisons.append((winner, loser))
-        
-        # ✅ Debugging: Print retrieved comparisons
-        st.write(f"🔍 Retrieved Comparisons from Firestore: {comparisons}")
+                comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
+
+        # ✅ Debugging: Print retrieved comparisons to check for errors
+        st.write(f"🔍 Cleaned Comparisons from Firestore: {comparisons}")
 
         return comparisons
     except Exception as e:
@@ -290,27 +290,29 @@ def fetch_all_comparisons(school_name, year_group):
 
 # ✅ Load rankings from Firestore
 stored_comparisons = fetch_all_comparisons(school_name, year_group)
+
 if "comparisons" not in st.session_state:
-    st.session_state.comparisons = stored_comparisons
-else:
-    for comp in stored_comparisons:
-        if comp not in st.session_state.comparisons:
-            st.session_state.comparisons.append(comp)
+    st.session_state.comparisons = []
+
+# ✅ Prevent duplicate votes from being re-added
+for comp in stored_comparisons:
+    if comp not in st.session_state.comparisons:
+        st.session_state.comparisons.append(comp)
+
+# ✅ Debugging: Show the total number of comparisons loaded
+st.write(f"✅ Total Comparisons Loaded: {len(st.session_state.comparisons)}")
 
 # ✅ Prevent running minimize() if no comparisons exist
-if not st.session_state.comparisons:
-    st.warning("⚠️ No comparisons available. Ranking cannot be calculated yet.")
+if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
+    st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
 else:
     sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
     
     # ✅ Initialize scores for all sample names
     initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
-    for name in sample_names:
-        if name not in initial_scores:
-            initial_scores[name] = 0  # ✅ Ensure all samples have a score
 
     # ✅ Debugging: Print comparisons before running minimize()
-    st.write(f"🔍 Comparisons Data: {st.session_state.comparisons}")
+    st.write(f"🔍 Final Comparisons Data Before Minimization: {st.session_state.comparisons}")
 
     result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
                       list(initial_scores.values()), method='BFGS')
