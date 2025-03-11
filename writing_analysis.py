@@ -273,6 +273,7 @@ def fetch_all_comparisons(school_name, year_group):
             if winner and loser:
                 comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
 
+
         return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
@@ -289,6 +290,7 @@ for comp in stored_comparisons:
     if comp not in st.session_state.comparisons:
         st.session_state.comparisons.append(comp)
 
+
 # ✅ Prevent running minimize() if no comparisons exist
 if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
     st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
@@ -300,6 +302,7 @@ else:
     for name in sample_names:
         if name not in initial_scores:
             initial_scores[name] = 0  # ✅ Ensure all samples have a score
+
 
     result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
                       list(initial_scores.values()), method='BFGS')
@@ -315,4 +318,3 @@ else:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-
