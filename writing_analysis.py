@@ -192,31 +192,27 @@ elif selected_option == "Home":
             except Exception as e:
                 st.error(f"❌ Failed to record vote: {str(e)}")
 
-        # ✅ Show only the next two images for comparison
-        next_pair = None
-        if st.session_state.pairings:
-            next_pair = sorted(
-                st.session_state.pairings,
-                key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
-            )[0]
+        # ✅ Ensure new pair of images appear for voting
+        if "pairings" in st.session_state and st.session_state.pairings:
+            img1, img2 = st.session_state.pairings.pop(0)  # ✅ Take the first pair from the list
 
-        if next_pair:
-            img1, img2 = next_pair
             col1, col2 = st.columns(2)
 
             with col1:
                 st.image(img1, use_container_width=True)  # ✅ Show image for voting
                 if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                    st.session_state.pairings.remove((img1, img2))
                     store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
 
             with col2:
                 st.image(img2, use_container_width=True)  # ✅ Show image for voting
                 if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                    st.session_state.pairings.remove((img1, img2))
                     store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                     st.rerun()
+
+        else:
+            st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
+
 
 
 # === RANKING SECTION === #
