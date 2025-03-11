@@ -221,9 +221,9 @@ if len(image_urls) >= 2:
                 st.session_state.pairings.remove((img1, img2))
                 store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                 st.rerun()
-
 # === RANKING SECTION === #
 def bradley_terry_log_likelihood(scores, comparisons):
+    """Calculates likelihood for Bradley-Terry ranking."""
     likelihood = 0
     for item1, item2, winner in comparisons:
         s1, s2 = scores[item1], scores[item2]
@@ -249,16 +249,9 @@ def get_image_scores():
                 continue  # ✅ Skip invalid Firestore entries
 
             # Count wins
-            if winner in scores:
-                scores[winner]["wins"] += 1
-            else:
-                scores[winner] = {"wins": 1, "losses": 0}
-
+            scores.setdefault(winner, {"wins": 0, "losses": 0})["wins"] += 1
             # Count losses
-            if loser in scores:
-                scores[loser]["losses"] += 1
-            else:
-                scores[loser] = {"wins": 0, "losses": 1}
+            scores.setdefault(loser, {"wins": 0, "losses": 0})["losses"] += 1
 
         return scores
     except Exception as e:
@@ -280,9 +273,6 @@ def fetch_all_comparisons(school_name, year_group):
             if winner and loser:
                 comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
 
-        # ✅ Debugging: Print retrieved comparisons to check for errors
-        st.write(f"🔍 Cleaned Comparisons from Firestore: {comparisons}")
-
         return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
@@ -299,9 +289,6 @@ for comp in stored_comparisons:
     if comp not in st.session_state.comparisons:
         st.session_state.comparisons.append(comp)
 
-# ✅ Debugging: Show the total number of comparisons loaded
-st.write(f"✅ Total Comparisons Loaded: {len(st.session_state.comparisons)}")
-
 # ✅ Prevent running minimize() if no comparisons exist
 if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
     st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
@@ -310,9 +297,9 @@ else:
     
     # ✅ Initialize scores for all sample names
     initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
-
-    # ✅ Debugging: Print comparisons before running minimize()
-    st.write(f"🔍 Final Comparisons Data Before Minimization: {st.session_state.comparisons}")
+    for name in sample_names:
+        if name not in initial_scores:
+            initial_scores[name] = 0  # ✅ Ensure all samples have a score
 
     result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
                       list(initial_scores.values()), method='BFGS')
@@ -328,3 +315,4 @@ else:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
+
