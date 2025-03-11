@@ -90,7 +90,6 @@ if st.session_state.logged_in:
                     blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                     image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
 
-
                     db.collection("writing_samples").add({
                         "school": school_name,
                         "year_group": year_group,
@@ -104,42 +103,90 @@ if st.session_state.logged_in:
                     st.error(f"❌ Upload Failed: {str(e)}")
 
         # === DISPLAY + DELETE FILES === #
-        st.subheader("Uploaded Samples")
+        st.sidebar.header("Manage Uploaded Images")
         try:
             docs = db.collection("writing_samples")\
-                    .where("school", "==", school_name)\
-                    .where("year_group", "==", year_group)\
-                    .stream()
+                     .where("school", "==", school_name)\
+                     .where("year_group", "==", year_group)\
+                     .stream()
 
             image_docs = [doc for doc in docs]
 
             if not image_docs:
-                st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+                st.sidebar.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
             else:
-                st.success(f"✅ Found {len(image_docs)} images in Firestore.")
+                st.sidebar.success(f"✅ Found {len(image_docs)} images in Firestore.")
 
                 for doc in image_docs:
                     data = doc.to_dict()
-                    col1, col2 = st.columns([3, 1])
+                    col1, col2 = st.sidebar.columns([3, 1])  # Make sure images and buttons are aligned
+
                     with col1:
-                        st.image(data["image_url"], width=200, caption=data["filename"])
-                    
+                        st.image(data["image_url"], width=100, caption=data["filename"])
+
                     if school_name == "adminkbrown":
                         with col2:
-                            if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):
+                            if st.button(f"🗑", key=f"delete_{doc.id}_{data['filename']}"):
                                 try:
                                     blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
                                     blob.delete()
                                     db.collection("writing_samples").document(doc.id).delete()
 
-                                    st.success(f"Deleted {data['filename']}")
+                                    st.sidebar.success(f"Deleted {data['filename']}")
                                     st.rerun()
 
                                 except Exception as e:
-                                    st.error(f"❌ Deletion Failed: {str(e)}")
+                                    st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
 
         except Exception as e:
-            st.error(f"❌ Firestore Query Failed: {str(e)}")
+            st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
+
+
+# === PAGE: MODIFY UPLOADED IMAGES === #
+if selected_option == "Modify Uploaded Images":
+    st.title("Manage Uploaded Images")
+
+    try:
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
+        image_docs = [doc for doc in docs]
+
+        if not image_docs:
+            st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+        else:
+            st.success(f"✅ Found {len(image_docs)} images in Firestore.")
+
+            for doc in image_docs:
+                data = doc.to_dict()
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.image(data["image_url"], width=200, caption=data["filename"])
+
+                if school_name == "adminkbrown":
+                    with col2:
+                        if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):
+                            try:
+                                blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
+                                blob.delete()
+                                db.collection("writing_samples").document(doc.id).delete()
+
+                                st.success(f"Deleted {data['filename']}")
+                                st.rerun()
+
+                            except Exception as e:
+                                st.error(f"❌ Deletion Failed: {str(e)}")
+
+    except Exception as e:
+        st.error(f"❌ Firestore Query Failed: {str(e)}")
+
+# === PAGE: HOME === #
+elif selected_option == "Home":
+    st.title("Comparative Judgement Writing Assessment")
+    st.write("Use the sidebar to navigate.")
+
 
 # === FETCH REMAINING IMAGES FOR COMPARISON === #
 image_urls = []
