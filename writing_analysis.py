@@ -137,19 +137,27 @@ if st.session_state.logged_in:
         except Exception as e:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# === PAGE: HOME (SHOW IMAGE COMPARISON & RANKINGS) === #
+# === PAGE: HOME (ONLY SHOW COMPARISON AND RANKINGS) === #
 elif selected_option == "Home":
     st.title("Comparative Judgement Writing Assessment")
     st.write("Use the sidebar to navigate.")
 
-    # ✅ Fetch images for comparison
+    # ✅ Fetch images from Firestore to compare
     image_urls = []
-    for doc in image_docs:
-        data = doc.to_dict()
-        if "image_url" in data:
-            image_urls.append(data["image_url"])
+    try:
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
 
-    # ✅ Ensure comparison logic only runs if we have at least 2 images
+        for doc in docs:
+            data = doc.to_dict()
+            if "image_url" in data:
+                image_urls.append(data["image_url"])
+    except Exception as e:
+        st.error(f"❌ Firestore Query Failed: {str(e)}")
+
+    # ✅ Ensure at least 2 images exist for comparison
     if len(image_urls) >= 2:
         st.subheader("Vote for Your Favorite Image")
         st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
@@ -166,7 +174,7 @@ elif selected_option == "Home":
                 st.error(f"❌ Failed to fetch ranking data: {str(e)}")
                 return []
 
-        # ✅ Load previous rankings from Firestore when logging in
+        # ✅ Load previous rankings when logging in
         if "pairings" not in st.session_state or not st.session_state.pairings:
             existing_comparisons = load_existing_comparisons(school_name, year_group)
 
@@ -192,7 +200,7 @@ elif selected_option == "Home":
             except Exception as e:
                 st.error(f"❌ Failed to record vote: {str(e)}")
 
-        # ✅ Ensure a new pair of images always appear for voting
+        # ✅ Ensure new pair of images always appear for voting
         if st.session_state.pairings:
             img1, img2 = st.session_state.pairings.pop(0)  # ✅ Take the first pair from the list
 
