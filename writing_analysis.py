@@ -147,163 +147,100 @@ if len(image_urls) >= 2:
         with col1:
             st.image(img1, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                st.session_state.comparisons.append((img1, img2, img1))
+                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                st.session_state.comparisons.append((img1, img2, img2))
+                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                 st.rerun()
 
-    # === RANKING SECTION (Appears Below Comparison) === #
-    if len(image_urls) >= 2:
-        st.subheader("Ranked Writing Samples")
+    else:
+        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
 
-        # ✅ Fetch all stored comparisons from Firestore
-        def fetch_all_comparisons(school_name, year_group):
-            """Retrieves all stored rankings from Firestore and ensures correct format."""
-            try:
-                docs = db.collection("rankings").where("school", "==", school_name)\
-                                               .where("year_group", "==", year_group)\
-                                               .stream()
-                comparisons = []
-                for doc in docs:
-                    data = doc.to_dict()
-                    winner = data.get("winning_image")
-                    loser = data.get("losing_image")
-                    if winner and loser:
-                        comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
-                return comparisons
-            except Exception as e:
-                st.error(f"❌ Failed to fetch comparison data: {str(e)}")
-                return []
-
-        stored_comparisons = fetch_all_comparisons(school_name, year_group)
-
-        if "comparisons" not in st.session_state:
-            st.session_state.comparisons = []
-
-        for comp in stored_comparisons:
-            if comp not in st.session_state.comparisons:
-                st.session_state.comparisons.append(comp)
-
-        # ✅ Prevent ranking if no comparisons exist
-        if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
-            st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
-        else:
-            sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
-            initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
-
-            result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
-                              list(initial_scores.values()), method='BFGS')
-
-            final_scores = dict(zip(sample_names, result.x))
-            ranked_samples = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
-
-            df = pd.DataFrame(ranked_samples, columns=["Writing Sample", "Score"])
-            wts_cutoff = np.percentile(df["Score"], 25)
-            gds_cutoff = np.percentile(df["Score"], 75)
-            df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
-
-            st.dataframe(df)
-            st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-
-
-# === RANKING SECTION === #
+# === RANKING SYSTEM: USING BRADLEY-TERRY MODEL === #
 def bradley_terry_log_likelihood(scores, comparisons):
     """Calculates likelihood for Bradley-Terry ranking."""
     likelihood = 0
     for item1, item2, winner in comparisons:
-        s1, s2 = scores[item1], scores[item2]
+        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default scores to 0
         p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
         p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
         likelihood += np.log(p1 if winner == item1 else p2)
     return -likelihood
 
-# ✅ Fetch rankings from Firestore for report generation
-def get_image_scores():
-    """Fetches stored rankings and counts wins/losses for each image."""
+# ✅ Store rankings in Firestore
+def store_vote(selected_image, other_image, school_name, year_group):
+    """Updates the ranking scores for each image in Firestore."""
     try:
-        docs = db.collection("rankings").where("school", "==", school_name)\
-                                       .where("year_group", "==", year_group)\
-                                       .stream()
-        scores = {}
-        for doc in docs:
-            vote = doc.to_dict()
-            winner = vote.get("winning_image")  # ✅ Use `.get()` to avoid KeyError
-            loser = vote.get("losing_image")
+        # Get existing rankings or initialize if not found
+        selected_ref = db.collection("rankings").document(selected_image)
+        other_ref = db.collection("rankings").document(other_image)
 
-            if not winner or not loser:
-                continue  # ✅ Skip invalid Firestore entries
+        selected_doc = selected_ref.get()
+        other_doc = other_ref.get()
 
-            # Count wins
-            scores.setdefault(winner, {"wins": 0, "losses": 0})["wins"] += 1
-            # Count losses
-            scores.setdefault(loser, {"wins": 0, "losses": 0})["losses"] += 1
+        selected_score = selected_doc.to_dict().get("score", 0) if selected_doc.exists else 0
+        other_score = other_doc.to_dict().get("score", 0) if other_doc.exists else 0
 
-        return scores
+        # Update scores (increase winner, decrease loser)
+        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
+        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
+
+        # Save updated scores back to Firestore
+        selected_ref.set({
+            "school": school_name,
+            "year_group": year_group,
+            "image_url": selected_image,
+            "score": selected_score
+        }, merge=True)
+
+        other_ref.set({
+            "school": school_name,
+            "year_group": year_group,
+            "image_url": other_image,
+            "score": other_score
+        }, merge=True)
+
     except Exception as e:
-        st.error(f"❌ Failed to fetch ranking data: {str(e)}")
-        return {}
+        st.error(f"❌ Failed to update image scores: {str(e)}")
 
-# ✅ Fetch all stored comparisons from Firestore for rankings
-def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored rankings from Firestore and ensures correct format."""
+# ✅ Fetch image rankings from Firestore
+def fetch_ranked_images(school_name, year_group):
+    """Fetches all ranked images from Firestore and sorts them by score."""
     try:
         docs = db.collection("rankings").where("school", "==", school_name)\
                                        .where("year_group", "==", year_group)\
                                        .stream()
-        comparisons = []
+        scores = []
         for doc in docs:
             data = doc.to_dict()
-            winner = data.get("winning_image")
-            loser = data.get("losing_image")
-            if winner and loser:
-                comparisons.append((winner, loser, winner))  # ✅ Ensure tuple has 3 elements
+            scores.append((data["image_url"], data.get("score", 0)))
 
+        # Sort images by score (higher score = better ranking)
+        return sorted(scores, key=lambda x: x[1], reverse=True)
 
-        return comparisons
     except Exception as e:
-        st.error(f"❌ Failed to fetch comparison data: {str(e)}")
+        st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
 
-# ✅ Load rankings from Firestore
-stored_comparisons = fetch_all_comparisons(school_name, year_group)
+# === DISPLAY FINAL RANKINGS === #
+st.subheader("Ranked Writing Samples")
 
-if "comparisons" not in st.session_state:
-    st.session_state.comparisons = []
+# ✅ Fetch final rankings from Firestore
+ranked_images = fetch_ranked_images(school_name, year_group)
 
-# ✅ Prevent duplicate votes from being re-added
-for comp in stored_comparisons:
-    if comp not in st.session_state.comparisons:
-        st.session_state.comparisons.append(comp)
+if ranked_images:
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score"])
 
-
-# ✅ Prevent running minimize() if no comparisons exist
-if not st.session_state.comparisons or any(len(comp) != 3 for comp in st.session_state.comparisons):
-    st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
-else:
-    sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
-    
-    # ✅ Initialize scores for all sample names
-    initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
-    for name in sample_names:
-        if name not in initial_scores:
-            initial_scores[name] = 0  # ✅ Ensure all samples have a score
-
-
-    result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
-                      list(initial_scores.values()), method='BFGS')
-
-    final_scores = dict(zip(sample_names, result.x))
-    ranked_samples = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
-
-    df = pd.DataFrame(ranked_samples, columns=["Writing Sample", "Score"])
+    # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
     gds_cutoff = np.percentile(df["Score"], 75)
     df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
 
-    st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
+else:
+    st.warning("⚠️ No ranked images found. Begin voting to generate rankings.")
+
