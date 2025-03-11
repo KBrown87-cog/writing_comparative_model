@@ -141,7 +141,7 @@ if st.session_state.logged_in:
         except Exception as e:
             st.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# === FETCH REMAINING IMAGES FOR COMPARISON === #
+# # === FETCH REMAINING IMAGES FOR COMPARISON === #
 image_urls = []
 for doc in image_docs:
     data = doc.to_dict()
@@ -158,9 +158,42 @@ if len(image_urls) >= 2:
     st.subheader("Vote for Your Favorite Image")
     st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
 
+    # ✅ Load existing rankings from Firestore for multi-user access
+    def get_existing_rankings():
+        try:
+            docs = db.collection("rankings").where("school", "==", school_name)\
+                                           .where("year_group", "==", year_group)\
+                                           .stream()
+            comparisons = [(doc.to_dict()["winning_image"], doc.to_dict()["losing_image"]) for doc in docs]
+            return comparisons
+        except Exception as e:
+            st.error(f"❌ Failed to fetch ranking data: {str(e)}")
+            return []
+
     if "pairings" not in st.session_state or not st.session_state.pairings:
+        existing_comparisons = get_existing_rankings()
+
+        # ✅ Ensure previous rankings are included
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
+
+        # ✅ Remove already ranked pairs
+        for comp in existing_comparisons:
+            if comp in st.session_state.pairings:
+                st.session_state.pairings.remove(comp)
+
+    def store_vote(winning_image, losing_image):
+        try:
+            # ✅ Store vote in Firestore for persistent ranking
+            db.collection("rankings").add({
+                "school": school_name,
+                "year_group": year_group,
+                "winning_image": winning_image,
+                "losing_image": losing_image,
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+        except Exception as e:
+            st.error(f"❌ Failed to record vote: {str(e)}")
 
     def get_next_pair():
         if st.session_state.pairings:
@@ -179,15 +212,15 @@ if len(image_urls) >= 2:
         with col1:
             st.image(img1, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                st.session_state.comparisons.append((img1, img2, img1))
                 st.session_state.pairings.remove((img1, img2))
+                store_vote(img1, img2)  # ✅ Store vote in Firestore
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                st.session_state.comparisons.append((img1, img2, img2))
                 st.session_state.pairings.remove((img1, img2))
+                store_vote(img2, img1)  # ✅ Store vote in Firestore
                 st.rerun()
 
 # === RANKING SECTION === #
@@ -199,6 +232,35 @@ def bradley_terry_log_likelihood(scores, comparisons):
         p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
         likelihood += np.log(p1 if winner == item1 else p2)
     return -likelihood
+
+# ✅ Fetch rankings from Firestore for report generation
+def get_image_scores():
+    try:
+        docs = db.collection("rankings").where("school", "==", school_name)\
+                                       .where("year_group", "==", year_group)\
+                                       .stream()
+        scores = {}
+        for doc in docs:
+            vote = doc.to_dict()
+            winner = vote["winning_image"]
+            loser = vote["losing_image"]
+
+            # Count wins
+            if winner in scores:
+                scores[winner]["wins"] += 1
+            else:
+                scores[winner] = {"wins": 1, "losses": 0}
+
+            # Count losses
+            if loser in scores:
+                scores[loser]["losses"] += 1
+            else:
+                scores[loser] = {"wins": 0, "losses": 1}
+
+        return scores
+    except Exception as e:
+        st.error(f"❌ Failed to fetch ranking data: {str(e)}")
+        return {}
 
 if st.session_state.comparisons:
     sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
