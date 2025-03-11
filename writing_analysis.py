@@ -137,92 +137,87 @@ if st.session_state.logged_in:
         except Exception as e:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# === PAGE: HOME === #
+# === PAGE: HOME (ONLY SHOW COMPARISON AND RANKINGS) === #
 elif selected_option == "Home":
     st.title("Comparative Judgement Writing Assessment")
     st.write("Use the sidebar to navigate.")
 
+    # ✅ Fetch images for comparison (DO NOT SHOW ALL IMAGES)
+    image_urls = []
+    for doc in image_docs:
+        data = doc.to_dict()
+        if "image_url" in data:
+            image_urls.append(data["image_url"])
 
-# === FETCH REMAINING IMAGES FOR COMPARISON === #
-image_urls = []
-for doc in image_docs:
-    data = doc.to_dict()
+    # ✅ Ensure comparison logic only runs if we have at least 2 images
+    if len(image_urls) >= 2:
+        st.subheader("Vote for Your Favorite Image")
+        st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
 
-    # ✅ Ensure "image_url" exists before displaying or adding to list
-    if "image_url" in data:
-        st.image(data["image_url"], width=200)
-        image_urls.append(data["image_url"])
-    else:
-        st.warning(f"⚠️ Missing 'image_url' field in document: {data}")
+        # ✅ Load existing rankings from Firestore for multi-user access
+        def load_existing_comparisons(school_name, year_group):
+            """Retrieve past rankings from Firestore."""
+            try:
+                docs = db.collection("rankings").where("school", "==", school_name)\
+                                               .where("year_group", "==", year_group)\
+                                               .stream()
+                return [(doc.to_dict()["winning_image"], doc.to_dict()["losing_image"]) for doc in docs]
+            except Exception as e:
+                st.error(f"❌ Failed to fetch ranking data: {str(e)}")
+                return []
 
-# ✅ Ensure comparison logic only runs if we have at least 2 images
-if len(image_urls) >= 2:
-    st.subheader("Vote for Your Favorite Image")
-    st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
+        # ✅ Load previous rankings from Firestore when logging in
+        if "pairings" not in st.session_state or not st.session_state.pairings:
+            existing_comparisons = load_existing_comparisons(school_name, year_group)
 
-    # ✅ Load existing rankings from Firestore for multi-user access
-    def load_existing_comparisons(school_name, year_group):
-        """Retrieve past rankings from Firestore."""
-        try:
-            docs = db.collection("rankings").where("school", "==", school_name)\
-                                           .where("year_group", "==", year_group)\
-                                           .stream()
-            return [(doc.to_dict()["winning_image"], doc.to_dict()["losing_image"]) for doc in docs]
-        except Exception as e:
-            st.error(f"❌ Failed to fetch ranking data: {str(e)}")
-            return []
+            # ✅ Generate all possible pairs
+            st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+            random.shuffle(st.session_state.pairings)
 
-    # ✅ Load previous rankings from Firestore when logging in
-    if "pairings" not in st.session_state or not st.session_state.pairings:
-        existing_comparisons = load_existing_comparisons(school_name, year_group)
+            # ✅ Remove already ranked pairs
+            for comp in existing_comparisons:
+                if comp in st.session_state.pairings:
+                    st.session_state.pairings.remove(comp)
 
-        # ✅ Generate all possible pairs
-        st.session_state.pairings = list(itertools.combinations(image_urls, 2))
-        random.shuffle(st.session_state.pairings)
+        def store_vote(winning_image, losing_image, school_name, year_group):
+            """Stores the ranking vote in Firestore so it persists between logins."""
+            try:
+                db.collection("rankings").add({
+                    "school": school_name,
+                    "year_group": year_group,
+                    "winning_image": winning_image,
+                    "losing_image": losing_image,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                })
+            except Exception as e:
+                st.error(f"❌ Failed to record vote: {str(e)}")
 
-        # ✅ Remove already ranked pairs
-        for comp in existing_comparisons:
-            if comp in st.session_state.pairings:
-                st.session_state.pairings.remove(comp)
+        # ✅ Updated voting system
+        next_pair = None
+        if st.session_state.pairings:
+            next_pair = sorted(
+                st.session_state.pairings,
+                key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
+            )[0]
 
-    def store_vote(winning_image, losing_image, school_name, year_group):
-        """Stores the ranking vote in Firestore so it persists between logins."""
-        try:
-            db.collection("rankings").add({
-                "school": school_name,
-                "year_group": year_group,
-                "winning_image": winning_image,
-                "losing_image": losing_image,
-                "timestamp": firestore.SERVER_TIMESTAMP
-            })
-        except Exception as e:
-            st.error(f"❌ Failed to record vote: {str(e)}")
+        if next_pair:
+            img1, img2 = next_pair
+            col1, col2 = st.columns(2)
 
-    # ✅ Updated voting system
-    next_pair = None
-    if st.session_state.pairings:
-        next_pair = sorted(
-            st.session_state.pairings,
-            key=lambda p: st.session_state.image_counts.get(p[0], 0) + st.session_state.image_counts.get(p[1], 0)
-        )[0]
+            with col1:
+                st.image(img1, use_container_width=True)
+                if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                    st.session_state.pairings.remove((img1, img2))
+                    store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
+                    st.rerun()
 
-    if next_pair:
-        img1, img2 = next_pair
-        col1, col2 = st.columns(2)
+            with col2:
+                st.image(img2, use_container_width=True)
+                if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                    st.session_state.pairings.remove((img1, img2))
+                    store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
+                    st.rerun()
 
-        with col1:
-            st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                st.session_state.pairings.remove((img1, img2))
-                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
-
-        with col2:
-            st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                st.session_state.pairings.remove((img1, img2))
-                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
 # === RANKING SECTION === #
 def bradley_terry_log_likelihood(scores, comparisons):
     """Calculates likelihood for Bradley-Terry ranking."""
