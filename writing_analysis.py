@@ -97,12 +97,12 @@ if st.session_state.logged_in:
                         "filename": uploaded_file.name
                     })
 
-                    st.success(f"{len(uploaded_files)} files uploaded successfully.")
+                    st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
 
                 except Exception as e:
-                    st.error(f"❌ Upload Failed: {str(e)}")
+                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
-        # === DISPLAY + DELETE FILES === #
+        # === DISPLAY + DELETE FILES (Now in Sidebar) === #
         st.sidebar.header("Manage Uploaded Images")
         try:
             docs = db.collection("writing_samples")\
@@ -119,68 +119,23 @@ if st.session_state.logged_in:
 
                 for doc in image_docs:
                     data = doc.to_dict()
-                    col1, col2 = st.sidebar.columns([3, 1])  # Make sure images and buttons are aligned
-
-                    with col1:
-                        st.image(data["image_url"], width=100, caption=data["filename"])
+                    st.sidebar.image(data["image_url"], width=100, caption=data["filename"])
 
                     if school_name == "adminkbrown":
-                        with col2:
-                            if st.button(f"🗑", key=f"delete_{doc.id}_{data['filename']}"):
-                                try:
-                                    blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                                    blob.delete()
-                                    db.collection("writing_samples").document(doc.id).delete()
-
-                                    st.sidebar.success(f"Deleted {data['filename']}")
-                                    st.rerun()
-
-                                except Exception as e:
-                                    st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
-
-        except Exception as e:
-            st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
-
-
-# === PAGE: MODIFY UPLOADED IMAGES === #
-if selected_option == "Modify Uploaded Images":
-    st.title("Manage Uploaded Images")
-
-    try:
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
-
-        image_docs = [doc for doc in docs]
-
-        if not image_docs:
-            st.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
-        else:
-            st.success(f"✅ Found {len(image_docs)} images in Firestore.")
-
-            for doc in image_docs:
-                data = doc.to_dict()
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.image(data["image_url"], width=200, caption=data["filename"])
-
-                if school_name == "adminkbrown":
-                    with col2:
-                        if st.button(f"🗑 Delete", key=f"delete_{doc.id}_{data['filename']}"):
+                        if st.sidebar.button(f"🗑 Delete {data['filename']}", key=f"delete_{doc.id}_{data['filename']}"):
                             try:
                                 blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
                                 blob.delete()
                                 db.collection("writing_samples").document(doc.id).delete()
 
-                                st.success(f"Deleted {data['filename']}")
+                                st.sidebar.success(f"Deleted {data['filename']}")
                                 st.rerun()
 
                             except Exception as e:
-                                st.error(f"❌ Deletion Failed: {str(e)}")
+                                st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
 
-    except Exception as e:
-        st.error(f"❌ Firestore Query Failed: {str(e)}")
+        except Exception as e:
+            st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
 # === PAGE: HOME === #
 elif selected_option == "Home":
