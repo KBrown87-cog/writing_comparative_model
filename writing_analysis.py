@@ -141,22 +141,19 @@ if st.session_state.logged_in:
         except Exception as e:
             st.error(f"❌ Firestore Query Failed: {str(e)}")
 
- # === FETCH REMAINING IMAGES FOR COMPARISON === #
+# === FETCH REMAINING IMAGES FOR COMPARISON === #
 image_urls = []
 for doc in image_docs:
     data = doc.to_dict()
-    # ✅ Display only images, remove unnecessary text output
-if "image_url" in data:
-    st.image(data["image_url"], width=200)
-else:
-    st.warning(f"⚠️ Image missing for {data['filename']}")
 
+    # ✅ Ensure "image_url" exists before displaying or adding to list
     if "image_url" in data:
+        st.image(data["image_url"], width=200)
         image_urls.append(data["image_url"])
     else:
         st.warning(f"⚠️ Missing 'image_url' field in document: {data}")
 
-# ✅ Ensure this runs after all documents are processed
+# ✅ Ensure comparison logic only runs if we have at least 2 images
 if len(image_urls) >= 2:
     st.subheader("Vote for Your Favorite Image")
     st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
