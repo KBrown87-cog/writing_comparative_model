@@ -242,8 +242,11 @@ def get_image_scores():
         scores = {}
         for doc in docs:
             vote = doc.to_dict()
-            winner = vote["winning_image"]
-            loser = vote["losing_image"]
+            winner = vote.get("winning_image")  # ✅ Use `.get()` to avoid KeyError
+            loser = vote.get("losing_image")
+
+            if not winner or not loser:
+                continue  # ✅ Skip invalid Firestore entries
 
             # Count wins
             if winner in scores:
@@ -269,19 +272,45 @@ def fetch_all_comparisons(school_name, year_group):
         docs = db.collection("rankings").where("school", "==", school_name)\
                                        .where("year_group", "==", year_group)\
                                        .stream()
-        return [(doc.to_dict()["winning_image"], doc.to_dict()["losing_image"]) for doc in docs]
+        comparisons = []
+        for doc in docs:
+            data = doc.to_dict()
+            winner = data.get("winning_image")
+            loser = data.get("losing_image")
+            if winner and loser:
+                comparisons.append((winner, loser))
+        
+        # ✅ Debugging: Print retrieved comparisons
+        st.write(f"🔍 Retrieved Comparisons from Firestore: {comparisons}")
+
+        return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
 
 # ✅ Load rankings from Firestore
 stored_comparisons = fetch_all_comparisons(school_name, year_group)
-if stored_comparisons:
-    st.session_state.comparisons.extend(stored_comparisons)
+if "comparisons" not in st.session_state:
+    st.session_state.comparisons = stored_comparisons
+else:
+    for comp in stored_comparisons:
+        if comp not in st.session_state.comparisons:
+            st.session_state.comparisons.append(comp)
 
-if st.session_state.comparisons:
+# ✅ Prevent running minimize() if no comparisons exist
+if not st.session_state.comparisons:
+    st.warning("⚠️ No comparisons available. Ranking cannot be calculated yet.")
+else:
     sample_names = list(set([item for sublist in st.session_state.comparisons for item in sublist[:2]]))
+    
+    # ✅ Initialize scores for all sample names
     initial_scores = {name: st.session_state.scores.get(name, 0) for name in sample_names}
+    for name in sample_names:
+        if name not in initial_scores:
+            initial_scores[name] = 0  # ✅ Ensure all samples have a score
+
+    # ✅ Debugging: Print comparisons before running minimize()
+    st.write(f"🔍 Comparisons Data: {st.session_state.comparisons}")
 
     result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), st.session_state.comparisons),
                       list(initial_scores.values()), method='BFGS')
