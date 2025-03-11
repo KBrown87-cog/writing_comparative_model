@@ -196,7 +196,6 @@ def bradley_terry_log_likelihood(scores, comparisons):
 def store_vote(selected_image, other_image, school_name, year_group):
     """Updates the ranking scores for each image in Firestore."""
     try:
-        # Get existing rankings or initialize if not found
         selected_ref = db.collection("rankings").document(selected_image)
         other_ref = db.collection("rankings").document(other_image)
 
@@ -225,8 +224,13 @@ def store_vote(selected_image, other_image, school_name, year_group):
             "score": other_score
         }, merge=True)
 
+        # ✅ Debugging
+        st.write(f"🔄 Vote stored successfully for {selected_image} vs {other_image}")
+        st.write(f"🏆 {selected_image} score: {selected_score}, ❌ {other_image} score: {other_score}")
+
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
+
 
 # ✅ Fetch image rankings from Firestore
 def fetch_ranked_images(school_name, year_group):
