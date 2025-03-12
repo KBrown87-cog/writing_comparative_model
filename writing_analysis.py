@@ -153,15 +153,15 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
+# ✅ Display images for comparison
 if len(image_urls) >= 2:
     st.subheader("Vote for Your Favorite Image")
+    st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
 
-    # ✅ Ensure that pairings are reset if they are empty
     if "pairings" not in st.session_state or not st.session_state.pairings:
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
 
-    # ✅ Ensure a new pair of images always appears for voting
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
@@ -178,6 +178,7 @@ if len(image_urls) >= 2:
                 store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
                 st.rerun()
 
+
     else:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
 
@@ -192,49 +193,44 @@ def bradley_terry_log_likelihood(scores, comparisons):
         likelihood += np.log(p1 if winner == item1 else p2)
     return -likelihood
 
-
-# ✅ Store rankings in Firestore (Now merges votes correctly)
-def store_vote(selected_image, other_image, school_name, year_group):
-    """Updates the ranking scores for each image in Firestore."""
+# ✅ Store votes in Firestore
+def store_vote(winning_image, losing_image, school_name, year_group):
+    """Stores the vote result in Firestore and updates ranking scores."""
     try:
-        selected_ref = db.collection("rankings").document(selected_image)
-        other_ref = db.collection("rankings").document(other_image)
+        # References for the images
+        winning_ref = db.collection("rankings").document(winning_image)
+        losing_ref = db.collection("rankings").document(losing_image)
 
-        selected_doc = selected_ref.get()
-        other_doc = other_ref.get()
+        # Get existing data (if any)
+        winning_doc = winning_ref.get()
+        losing_doc = losing_ref.get()
 
-        selected_score = selected_doc.to_dict().get("score", 0) if selected_doc.exists else 0
-        other_score = other_doc.to_dict().get("score", 0) if other_doc.exists else 0
-        selected_votes = selected_doc.to_dict().get("votes", 0) if selected_doc.exists else 0
-        other_votes = other_doc.to_dict().get("votes", 0) if other_doc.exists else 0
+        # Fetch existing scores or initialize them
+        winning_score = winning_doc.to_dict().get("score", 0) if winning_doc.exists else 0
+        losing_score = losing_doc.to_dict().get("score", 0) if losing_doc.exists else 0
 
-        # ✅ Update Bradley-Terry score system
-        selected_score += 1.2 / (1 + selected_score)
-        other_score -= 0.8 / (1 + other_score)
+        # Update the scores
+        winning_score += 1.2 / (1 + winning_score)  # Reward the selected image
+        losing_score -= 0.8 / (1 + losing_score)    # Penalize the non-selected image
 
-        # ✅ Update vote count
-        selected_votes += 1
-        other_votes += 1
-
-        # ✅ Save updated scores & votes back to Firestore
-        selected_ref.set({
+        # Update Firestore with the new scores
+        winning_ref.set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": selected_image,
-            "score": selected_score,
-            "votes": selected_votes
+            "image_url": winning_image,
+            "score": winning_score
         }, merge=True)
 
-        other_ref.set({
+        losing_ref.set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": other_image,
-            "score": other_score,
-            "votes": other_votes
+            "image_url": losing_image,
+            "score": losing_score
         }, merge=True)
 
     except Exception as e:
-        st.error(f"❌ Failed to update image scores: {str(e)}")
+        st.error(f"❌ Failed to update ranking: {str(e)}")
+
 
 
 # ✅ Fetch image rankings from Firestore
@@ -256,13 +252,14 @@ def fetch_ranked_images(school_name, year_group):
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
 
+# === DISPLAY FINAL RANKINGS === #
 st.subheader("Ranked Writing Samples")
 
 # ✅ Fetch final rankings from Firestore
 ranked_images = fetch_ranked_images(school_name, year_group)
 
 if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score"])
 
     # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
