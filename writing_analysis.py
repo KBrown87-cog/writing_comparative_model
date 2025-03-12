@@ -193,43 +193,53 @@ def bradley_terry_log_likelihood(scores, comparisons):
         likelihood += np.log(p1 if winner == item1 else p2)
     return -likelihood
 
-# ✅ Store votes in Firestore
-def store_vote(winning_image, losing_image, school_name, year_group):
-    """Stores the vote result in Firestore and updates ranking scores."""
+# ✅ Store votes in Firestore correctly
+def store_vote(selected_image, other_image, school_name, year_group):
+    """Stores votes and updates ranking scores in Firestore."""
     try:
-        # References for the images
-        winning_ref = db.collection("rankings").document(winning_image)
-        losing_ref = db.collection("rankings").document(losing_image)
+        # Reference the documents in Firestore
+        selected_ref = db.collection("rankings").document(selected_image)
+        other_ref = db.collection("rankings").document(other_image)
 
-        # Get existing data (if any)
-        winning_doc = winning_ref.get()
-        losing_doc = losing_ref.get()
+        selected_doc = selected_ref.get()
+        other_doc = other_ref.get()
 
-        # Fetch existing scores or initialize them
-        winning_score = winning_doc.to_dict().get("score", 0) if winning_doc.exists else 0
-        losing_score = losing_doc.to_dict().get("score", 0) if losing_doc.exists else 0
+        # Get existing scores or initialize if not found
+        selected_data = selected_doc.to_dict() if selected_doc.exists else {"score": 0, "votes": 0}
+        other_data = other_doc.to_dict() if other_doc.exists else {"score": 0, "votes": 0}
 
-        # Update the scores
-        winning_score += 1.2 / (1 + winning_score)  # Reward the selected image
-        losing_score -= 0.8 / (1 + losing_score)    # Penalize the non-selected image
+        # Extract previous values
+        selected_score = selected_data.get("score", 0)
+        other_score = other_data.get("score", 0)
+        selected_votes = selected_data.get("votes", 0)
+        other_votes = other_data.get("votes", 0)
 
-        # Update Firestore with the new scores
-        winning_ref.set({
+        # ✅ Update Scores & Votes
+        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
+        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
+        selected_votes += 1  # Count how many times selected
+        other_votes += 1  # Count how many times other was in a vote
+
+        # ✅ Update Firestore with new values
+        selected_ref.set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": winning_image,
-            "score": winning_score
+            "image_url": selected_image,
+            "score": selected_score,
+            "votes": selected_votes
         }, merge=True)
 
-        losing_ref.set({
+        other_ref.set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": losing_image,
-            "score": losing_score
+            "image_url": other_image,
+            "score": other_score,
+            "votes": other_votes
         }, merge=True)
 
     except Exception as e:
-        st.error(f"❌ Failed to update ranking: {str(e)}")
+        st.error(f"❌ Failed to update image scores: {str(e)}")
+
 
 
 
@@ -245,21 +255,21 @@ def fetch_ranked_images(school_name, year_group):
             data = doc.to_dict()
             scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
 
-        # ✅ Sort by score in descending order
+        # ✅ Sort images by score (higher score = better ranking)
         return sorted(scores, key=lambda x: x[1], reverse=True)
 
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
 
-# === DISPLAY FINAL RANKINGS === #
+# ✅ Display Ranked Writing Samples
 st.subheader("Ranked Writing Samples")
 
 # ✅ Fetch final rankings from Firestore
 ranked_images = fetch_ranked_images(school_name, year_group)
 
 if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score"])
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
 
     # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
@@ -270,3 +280,4 @@ if ranked_images:
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
 else:
     st.warning("⚠️ No ranked images found. Begin voting to generate rankings.")
+
