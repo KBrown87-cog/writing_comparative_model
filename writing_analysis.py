@@ -192,7 +192,8 @@ def bradley_terry_log_likelihood(scores, comparisons):
         likelihood += np.log(p1 if winner == item1 else p2)
     return -likelihood
 
-# ✅ Store rankings in Firestore
+
+# ✅ Store rankings in Firestore (Now merges votes correctly)
 def store_vote(selected_image, other_image, school_name, year_group):
     """Updates the ranking scores for each image in Firestore."""
     try:
@@ -204,29 +205,33 @@ def store_vote(selected_image, other_image, school_name, year_group):
 
         selected_score = selected_doc.to_dict().get("score", 0) if selected_doc.exists else 0
         other_score = other_doc.to_dict().get("score", 0) if other_doc.exists else 0
+        selected_votes = selected_doc.to_dict().get("votes", 0) if selected_doc.exists else 0
+        other_votes = other_doc.to_dict().get("votes", 0) if other_doc.exists else 0
 
-        # Update scores (increase winner, decrease loser)
-        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
-        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
+        # ✅ Update Bradley-Terry score system
+        selected_score += 1.2 / (1 + selected_score)
+        other_score -= 0.8 / (1 + other_score)
 
-        # Save updated scores back to Firestore
+        # ✅ Update vote count
+        selected_votes += 1
+        other_votes += 1
+
+        # ✅ Save updated scores & votes back to Firestore
         selected_ref.set({
             "school": school_name,
             "year_group": year_group,
             "image_url": selected_image,
-            "score": selected_score
+            "score": selected_score,
+            "votes": selected_votes
         }, merge=True)
 
         other_ref.set({
             "school": school_name,
             "year_group": year_group,
             "image_url": other_image,
-            "score": other_score
+            "score": other_score,
+            "votes": other_votes
         }, merge=True)
-
-        # ✅ Debugging
-        st.write(f"🔄 Vote stored successfully for {selected_image} vs {other_image}")
-        st.write(f"🏆 {selected_image} score: {selected_score}, ❌ {other_image} score: {other_score}")
 
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
@@ -242,23 +247,22 @@ def fetch_ranked_images(school_name, year_group):
         scores = []
         for doc in docs:
             data = doc.to_dict()
-            scores.append((data["image_url"], data.get("score", 0)))
+            scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
 
-        # Sort images by score (higher score = better ranking)
+        # ✅ Sort by score in descending order
         return sorted(scores, key=lambda x: x[1], reverse=True)
 
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
 
-# === DISPLAY FINAL RANKINGS === #
 st.subheader("Ranked Writing Samples")
 
 # ✅ Fetch final rankings from Firestore
 ranked_images = fetch_ranked_images(school_name, year_group)
 
 if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score"])
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
 
     # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
@@ -269,4 +273,3 @@ if ranked_images:
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
 else:
     st.warning("⚠️ No ranked images found. Begin voting to generate rankings.")
-
