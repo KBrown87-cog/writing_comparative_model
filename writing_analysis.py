@@ -154,31 +154,27 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-# ✅ Ensure new images are presented for voting
+# ✅ Ensure only images from the selected year group are presented
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
 
-    if "pairings" not in st.session_state or not st.session_state.pairings:
-        st.session_state.pairings = list(itertools.combinations(image_urls, 2))
-        random.shuffle(st.session_state.pairings)
+    pairings = list(itertools.combinations(image_urls, 2))
+    random.shuffle(pairings)
+    img1, img2 = pairings.pop(0)
 
-    # ✅ Process each pair one by one
-    if st.session_state.pairings:
-        img1, img2 = st.session_state.pairings.pop(0)
+    col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns(2)  # ✅ This must be aligned correctly
+    with col1:
+        st.image(img1, use_container_width=True)
+        if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+            store_vote(img1, img2, school_name, year_group)
+            st.rerun()
 
-        with col1:
-            st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                store_vote(img1, img2, school_name, year_group)
-                st.rerun()
-
-        with col2:
-            st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                store_vote(img2, img1, school_name, year_group)
-                st.rerun()
+    with col2:
+        st.image(img2, use_container_width=True)
+        if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+            store_vote(img2, img1, school_name, year_group)
+            st.rerun()
 
         # ✅ Automatically store the comparison in Firestore
         try:
@@ -197,6 +193,7 @@ if len(image_urls) >= 2:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
 
+# ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
     try:
@@ -325,10 +322,14 @@ if stored_comparisons:
             "score": float(score)  # ✅ Store as float for consistency
         }, merge=True)
 
+# ✅ Fetch **only** the ranked images for the selected year group
+ranked_images = fetch_ranked_images(school_name, year_group)
 
-
-    # ✅ Display Rankings in a Table
-    df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
+# ✅ Display Rankings in a Table
+if ranked_images:
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
+    
+    # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
     gds_cutoff = np.percentile(df["Score"], 75)
     df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
@@ -336,3 +337,5 @@ if stored_comparisons:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
+else:
+    st.warning("⚠️ No ranked images found for this year group. Begin voting to generate rankings.")
