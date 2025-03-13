@@ -334,14 +334,20 @@ def fetch_ranked_images(school_name, year_group):
         scores = []
         for doc in docs:
             data = doc.to_dict()
-            scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
+            st.write(f"🏫 Ranking Data Retrieved: {data}")  # ✅ Debugging: See all retrieved rankings
+
+            # 🔥 Extra check to ensure filtering works
+            if data.get("year_group") == year_group:  
+                scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
 
         # ✅ Sort images by score (higher score = better ranking)
+        st.write(f"🔍 Final Rankings Filtered: {scores}")  # ✅ Debugging: See final filtered data
         return sorted(scores, key=lambda x: x[1], reverse=True)
 
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
+
 
 # ✅ Now call `fetch_ranked_images` at the correct location
 ranked_images = fetch_ranked_images(school_name, year_group)
