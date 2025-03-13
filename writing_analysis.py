@@ -131,7 +131,7 @@ if st.session_state.logged_in:
         except Exception as e:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
+
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
 # ✅ Fetch images from Firestore to compare
 image_urls = []
@@ -148,6 +148,21 @@ try:
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
+        # ✅ Add Selection Buttons Below Each Image
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.image(img1, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
+                st.rerun()
+
+        with col2:
+            st.image(img2, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
+                st.rerun()
 
 # ✅ Prevent error if no images exist
 if not image_urls:
@@ -234,46 +249,31 @@ def store_vote(selected_image, other_image, school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
 
-# ✅ Fetch all stored comparisons from Firestore
-def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored comparisons from Firestore."""
-    try:
-        docs = db.collection("comparisons").where("school", "==", school_name)\
-                                           .where("year_group", "==", year_group)\
-                                           .stream()
-        comparisons = []
-        for doc in docs:
-            data = doc.to_dict()
-            img1 = data.get("image_1")
-            img2 = data.get("image_2")
-            if img1 and img2:
-                comparisons.append((img1, img2, img1))  # ✅ Ensure correct tuple format
+# ✅ Fetch Rankings from Firestore and Apply Bradley-Terry Model
+stored_comparisons = fetch_all_comparisons(school_name, year_group)
 
-        if not comparisons:
-            st.warning("⚠️ No comparisons found in Firestore!")
+if stored_comparisons:
+    rankings = calculate_rankings(stored_comparisons)
 
-        return comparisons
-    except Exception as e:
-        st.error(f"❌ Failed to fetch comparison data: {str(e)}")
-        return []
+    # ✅ Store Rankings in Firestore
+    for image, score in rankings.items():
+        db.collection("rankings").document(image).set({
+            "school": school_name,
+            "year_group": year_group,
+            "image_url": image,
+            "score": float(score)  # ✅ Store as float for consistency
+        }, merge=True)
 
+    # ✅ Display Rankings in a Table
+    df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
+    wts_cutoff = np.percentile(df["Score"], 25)
+    gds_cutoff = np.percentile(df["Score"], 75)
+    df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
 
-# ✅ Calculate Rankings Using Bradley-Terry Model
-def bradley_terry_log_likelihood(scores, comparisons):
-    """Calculates likelihood for Bradley-Terry ranking."""
-    likelihood = 0
+    st.subheader("Ranked Writing Samples")
+    st.dataframe(df)
+    st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
 
-    if not comparisons:
-        st.error("❌ No comparisons received in Bradley-Terry function.")
-        return float('inf')
-
-    for item1, item2, winner in comparisons:
-        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default to 0
-        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
-        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
-        likelihood += np.log(p1 if winner == item1 else p2)
-
-    return -likelihood
 
 
     # ✅ Display Rankings
