@@ -276,7 +276,6 @@ def bradley_terry_log_likelihood(scores, comparisons):
     return -likelihood
 
 
-
     # ✅ Display Rankings
     df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
     wts_cutoff = np.percentile(df["Score"], 25)
