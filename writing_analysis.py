@@ -322,7 +322,28 @@ if stored_comparisons:
             "score": float(score)  # ✅ Store as float for consistency
         }, merge=True)
 
-# ✅ Fetch **only** the ranked images for the selected year group
+# ✅ Define function to fetch ranked images before calling it
+def fetch_ranked_images(school_name, year_group):
+    """Fetches all ranked images from Firestore and sorts them by score."""
+    try:
+        docs = db.collection("rankings")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
+        scores = []
+        for doc in docs:
+            data = doc.to_dict()
+            scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
+
+        # ✅ Sort images by score (higher score = better ranking)
+        return sorted(scores, key=lambda x: x[1], reverse=True)
+
+    except Exception as e:
+        st.error(f"❌ Failed to fetch ranked images: {str(e)}")
+        return []
+
+# ✅ Now call `fetch_ranked_images` at the correct location
 ranked_images = fetch_ranked_images(school_name, year_group)
 
 # ✅ Display Rankings in a Table
