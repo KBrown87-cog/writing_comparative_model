@@ -149,21 +149,6 @@ try:
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
-        # ✅ Add Selection Buttons Below Each Image
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
-
-        with col2:
-            st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
-
 # ✅ Prevent error if no images exist
 if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
@@ -181,9 +166,9 @@ if len(image_urls) >= 2:
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
-        # ✅ Ensure indentation is correct for columns
+        # ✅ Corrected Indentation: Ensure inside comparison block
         col1, col2 = st.columns(2)
-        
+
         with col1:
             st.image(img1, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
@@ -208,6 +193,10 @@ if len(image_urls) >= 2:
             st.success("Comparison Stored Successfully")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
+
+    else:
+        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
+
 
 
 
