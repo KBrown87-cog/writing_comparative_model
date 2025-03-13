@@ -132,6 +132,7 @@ if st.session_state.logged_in:
             st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
+# === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
 # ✅ Fetch images from Firestore to compare
 image_urls = []
 try:
@@ -246,37 +247,35 @@ def fetch_all_comparisons(school_name, year_group):
             img1 = data.get("image_1")
             img2 = data.get("image_2")
             if img1 and img2:
-                comparisons.append((img1, img2))  # ✅ Ensure only pairs are stored
+                comparisons.append((img1, img2, img1))  # ✅ Ensure correct tuple format
+
+        if not comparisons:
+            st.warning("⚠️ No comparisons found in Firestore!")
+
         return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
 
+
 # ✅ Calculate Rankings Using Bradley-Terry Model
-def calculate_rankings(comparisons):
-    """Applies Bradley-Terry Model to rank images."""
-    sample_names = list(set([item for sublist in comparisons for item in sublist]))
-    initial_scores = {name: 0 for name in sample_names}
+def bradley_terry_log_likelihood(scores, comparisons):
+    """Calculates likelihood for Bradley-Terry ranking."""
+    likelihood = 0
 
-    result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), comparisons),
-                      list(initial_scores.values()), method='BFGS')
+    if not comparisons:
+        st.error("❌ No comparisons received in Bradley-Terry function.")
+        return float('inf')
 
-    return dict(zip(sample_names, result.x))
+    for item1, item2, winner in comparisons:
+        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default to 0
+        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
+        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
+        likelihood += np.log(p1 if winner == item1 else p2)
 
-# ✅ Fetch rankings from Firestore and apply ranking model
-stored_comparisons = fetch_all_comparisons(school_name, year_group)
+    return -likelihood
 
-if stored_comparisons:
-    rankings = calculate_rankings(stored_comparisons)
 
-    # ✅ Store rankings in Firestore
-    for image, score in rankings.items():
-        db.collection("rankings").document(image).set({
-            "school": school_name,
-            "year_group": year_group,
-            "image_url": image,
-            "score": float(score)  # ✅ Store as float for consistency
-        }, merge=True)
 
     # ✅ Display Rankings
     df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
@@ -287,4 +286,5 @@ if stored_comparisons:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
+
 
