@@ -154,7 +154,7 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-# ✅ Automatically generate and store comparisons
+# ✅ Ensure new images are presented for voting
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
 
@@ -166,19 +166,18 @@ if len(image_urls) >= 2:
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
-        # ✅ Corrected Indentation: Ensure inside comparison block
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)  # ✅ This must be aligned correctly
 
         with col1:
             st.image(img1, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
+                store_vote(img1, img2, school_name, year_group)
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
+                store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
         # ✅ Automatically store the comparison in Firestore
@@ -198,20 +197,17 @@ if len(image_urls) >= 2:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
 
-
-
-# ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
     try:
-        # Reference the documents in Firestore
+        # Reference Firestore documents
         selected_ref = db.collection("rankings").document(selected_image)
         other_ref = db.collection("rankings").document(other_image)
 
         selected_doc = selected_ref.get()
         other_doc = other_ref.get()
 
-        # Get existing scores or initialize if not found
+        # Get existing scores or initialize
         selected_data = selected_doc.to_dict() if selected_doc.exists else {"score": 0, "votes": 0}
         other_data = other_doc.to_dict() if other_doc.exists else {"score": 0, "votes": 0}
 
@@ -221,13 +217,13 @@ def store_vote(selected_image, other_image, school_name, year_group):
         selected_votes = selected_data.get("votes", 0)
         other_votes = other_data.get("votes", 0)
 
-        # ✅ Update Scores & Votes
-        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
-        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
-        selected_votes += 1  # Count how many times selected
-        other_votes += 1  # Count how many times other was in a vote
+        # ✅ Apply Bradley-Terry Score Adjustments
+        selected_score += 1.2 / (1 + selected_score)  # Reward winning image
+        other_score -= 0.8 / (1 + other_score)  # Penalize losing image
+        selected_votes += 1  # Increase selection count
+        other_votes += 1  # Increase total comparison count
 
-        # ✅ Update Firestore with new values
+        # ✅ Update Firestore
         selected_ref.set({
             "school": school_name,
             "year_group": year_group,
@@ -246,6 +242,67 @@ def store_vote(selected_image, other_image, school_name, year_group):
 
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
+
+
+# ✅ Fetch all stored comparisons from Firestore
+def fetch_all_comparisons(school_name, year_group):
+    """Retrieves all stored comparisons from Firestore."""
+    try:
+        docs = db.collection("comparisons").where("school", "==", school_name)\
+                                           .where("year_group", "==", year_group)\
+                                           .stream()
+        comparisons = []
+        for doc in docs:
+            data = doc.to_dict()
+            img1 = data.get("image_1")
+            img2 = data.get("image_2")
+            if img1 and img2:
+                comparisons.append((img1, img2, img1))  # ✅ Ensuring correct tuple format
+
+        if not comparisons:
+            st.warning("⚠️ No comparisons found in Firestore!")
+
+        return comparisons
+    except Exception as e:
+        st.error(f"❌ Failed to fetch comparison data: {str(e)}")
+        return []
+
+def calculate_rankings(comparisons):
+    """Applies Bradley-Terry Model to rank images."""
+    if not comparisons:
+        st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
+        return {}
+
+    # ✅ Extract unique image names
+    sample_names = list(set([img for pair in comparisons for img in pair[:2]]))  # Ensure only image names
+    initial_scores = {name: 0 for name in sample_names}
+
+    try:
+        result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), comparisons),
+                          list(initial_scores.values()), method='BFGS')
+
+        return dict(zip(sample_names, result.x))
+    except Exception as e:
+        st.error(f"❌ Ranking Calculation Failed: {str(e)}")
+        return {}
+
+
+# ✅ Bradley-Terry Model for Ranking
+def bradley_terry_log_likelihood(scores, comparisons):
+    """Calculates likelihood for Bradley-Terry ranking."""
+    likelihood = 0
+
+    if not comparisons:
+        st.error("❌ No comparisons received in Bradley-Terry function.")
+        return float('inf')
+
+    for item1, item2, winner in comparisons:
+        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default to 0
+        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
+        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
+        likelihood += np.log(p1 if winner == item1 else p2)
+
+    return -likelihood
 
 # ✅ Fetch Rankings from Firestore and Apply Bradley-Terry Model
 stored_comparisons = fetch_all_comparisons(school_name, year_group)
@@ -271,4 +328,3 @@ if stored_comparisons:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-
