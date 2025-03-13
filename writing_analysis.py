@@ -181,7 +181,9 @@ if len(image_urls) >= 2:
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
-        col1, col2 = st.columns(2)  # ✅ This line is now correctly placed
+        # ✅ Ensure indentation is correct for columns
+        col1, col2 = st.columns(2)
+        
         with col1:
             st.image(img1, use_container_width=True)
             if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
@@ -206,6 +208,7 @@ if len(image_urls) >= 2:
             st.success("Comparison Stored Successfully")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
 
 # ✅ Store votes in Firestore correctly
