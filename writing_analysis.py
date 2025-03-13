@@ -184,9 +184,15 @@ if len(image_urls) >= 2:
         col1, col2 = st.columns(2)
         with col1:
             st.image(img1, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
+                st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
+                st.rerun()
 
         # ✅ Automatically store the comparison in Firestore
         try:
@@ -273,17 +279,4 @@ if stored_comparisons:
     st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-
-
-
-    # ✅ Display Rankings
-    df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
-    wts_cutoff = np.percentile(df["Score"], 25)
-    gds_cutoff = np.percentile(df["Score"], 75)
-    df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
-
-    st.subheader("Ranked Writing Samples")
-    st.dataframe(df)
-    st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-
 
