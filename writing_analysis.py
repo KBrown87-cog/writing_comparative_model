@@ -153,45 +153,43 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-# ✅ Display images for comparison
+
+
+
+    else:
+        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
+
+# ✅ Automatically generate and store comparisons
 if len(image_urls) >= 2:
-    st.subheader("Vote for Your Favorite Image")
-    st.write(f"Comparative Judgements: {len(st.session_state.comparisons)}")
+    st.subheader("Comparing Writing Samples")
 
     if "pairings" not in st.session_state or not st.session_state.pairings:
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
 
+    # ✅ Process each pair one by one
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
         col1, col2 = st.columns(2)
         with col1:
             st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-                store_vote(img1, img2, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-                store_vote(img2, img1, school_name, year_group)  # ✅ Store vote in Firestore
-                st.rerun()
 
-
-    else:
-        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
-
-# === RANKING SYSTEM: USING BRADLEY-TERRY MODEL === #
-def bradley_terry_log_likelihood(scores, comparisons):
-    """Calculates likelihood for Bradley-Terry ranking."""
-    likelihood = 0
-    for item1, item2, winner in comparisons:
-        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default scores to 0
-        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
-        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
-        likelihood += np.log(p1 if winner == item1 else p2)
-    return -likelihood
+        # ✅ Automatically store the comparison in Firestore
+        try:
+            db.collection("comparisons").add({
+                "school": school_name,
+                "year_group": year_group,
+                "image_1": img1,
+                "image_2": img2,
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+            st.success("Comparison Stored Successfully")
+        except Exception as e:
+            st.error(f"❌ Failed to store comparison: {str(e)}")
 
 # ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
@@ -240,44 +238,58 @@ def store_vote(selected_image, other_image, school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
 
-
-
-
-# ✅ Fetch image rankings from Firestore
-def fetch_ranked_images(school_name, year_group):
-    """Fetches all ranked images from Firestore and sorts them by score."""
+# ✅ Fetch all stored comparisons from Firestore
+def fetch_all_comparisons(school_name, year_group):
+    """Retrieves all stored comparisons from Firestore."""
     try:
-        docs = db.collection("rankings").where("school", "==", school_name)\
-                                       .where("year_group", "==", year_group)\
-                                       .stream()
-        scores = []
+        docs = db.collection("comparisons").where("school", "==", school_name)\
+                                           .where("year_group", "==", year_group)\
+                                           .stream()
+        comparisons = []
         for doc in docs:
             data = doc.to_dict()
-            scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
-
-        # ✅ Sort images by score (higher score = better ranking)
-        return sorted(scores, key=lambda x: x[1], reverse=True)
-
+            img1 = data.get("image_1")
+            img2 = data.get("image_2")
+            if img1 and img2:
+                comparisons.append((img1, img2))  # ✅ Ensure only pairs are stored
+        return comparisons
     except Exception as e:
-        st.error(f"❌ Failed to fetch ranked images: {str(e)}")
+        st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
 
-# ✅ Display Ranked Writing Samples
-st.subheader("Ranked Writing Samples")
+# ✅ Calculate Rankings Using Bradley-Terry Model
+def calculate_rankings(comparisons):
+    """Applies Bradley-Terry Model to rank images."""
+    sample_names = list(set([item for sublist in comparisons for item in sublist]))
+    initial_scores = {name: 0 for name in sample_names}
 
-# ✅ Fetch final rankings from Firestore
-ranked_images = fetch_ranked_images(school_name, year_group)
+    result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), comparisons),
+                      list(initial_scores.values()), method='BFGS')
 
-if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
+    return dict(zip(sample_names, result.x))
 
-    # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
+# ✅ Fetch rankings from Firestore and apply ranking model
+stored_comparisons = fetch_all_comparisons(school_name, year_group)
+
+if stored_comparisons:
+    rankings = calculate_rankings(stored_comparisons)
+
+    # ✅ Store rankings in Firestore
+    for image, score in rankings.items():
+        db.collection("rankings").document(image).set({
+            "school": school_name,
+            "year_group": year_group,
+            "image_url": image,
+            "score": float(score)  # ✅ Store as float for consistency
+        }, merge=True)
+
+    # ✅ Display Rankings
+    df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
     wts_cutoff = np.percentile(df["Score"], 25)
     gds_cutoff = np.percentile(df["Score"], 75)
     df["Standard"] = df["Score"].apply(lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS"))
 
+    st.subheader("Ranked Writing Samples")
     st.dataframe(df)
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
-else:
-    st.warning("⚠️ No ranked images found. Begin voting to generate rankings.")
 
