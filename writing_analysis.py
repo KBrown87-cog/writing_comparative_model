@@ -153,12 +153,6 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-
-
-
-    else:
-        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue voting.")
-
 # ✅ Automatically generate and store comparisons
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
@@ -190,6 +184,7 @@ if len(image_urls) >= 2:
             st.success("Comparison Stored Successfully")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
 # ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
