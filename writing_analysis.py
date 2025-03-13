@@ -200,30 +200,33 @@ if len(image_urls) >= 2:
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
     try:
-        # Reference Firestore documents
-        selected_ref = db.collection("rankings").document(selected_image)
-        other_ref = db.collection("rankings").document(other_image)
+        # ✅ Generate valid Firestore document IDs
+        selected_doc_id = hashlib.sha256(selected_image.encode()).hexdigest()[:20]
+        other_doc_id = hashlib.sha256(other_image.encode()).hexdigest()[:20]
+
+        selected_ref = db.collection("rankings").document(selected_doc_id)
+        other_ref = db.collection("rankings").document(other_doc_id)
 
         selected_doc = selected_ref.get()
         other_doc = other_ref.get()
 
-        # Get existing scores or initialize
+        # ✅ Get existing scores or initialize if not found
         selected_data = selected_doc.to_dict() if selected_doc.exists else {"score": 0, "votes": 0}
         other_data = other_doc.to_dict() if other_doc.exists else {"score": 0, "votes": 0}
 
-        # Extract previous values
+        # ✅ Extract previous values
         selected_score = selected_data.get("score", 0)
         other_score = other_data.get("score", 0)
         selected_votes = selected_data.get("votes", 0)
         other_votes = other_data.get("votes", 0)
 
-        # ✅ Apply Bradley-Terry Score Adjustments
-        selected_score += 1.2 / (1 + selected_score)  # Reward winning image
-        other_score -= 0.8 / (1 + other_score)  # Penalize losing image
-        selected_votes += 1  # Increase selection count
-        other_votes += 1  # Increase total comparison count
+        # ✅ Update Scores & Votes
+        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
+        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
+        selected_votes += 1  # Count how many times selected
+        other_votes += 1  # Count how many times other was in a vote
 
-        # ✅ Update Firestore
+        # ✅ Update Firestore with new values
         selected_ref.set({
             "school": school_name,
             "year_group": year_group,
@@ -312,12 +315,17 @@ if stored_comparisons:
 
     # ✅ Store Rankings in Firestore
     for image, score in rankings.items():
-        db.collection("rankings").document(image).set({
+        # ✅ Ensure image URL is sanitized before using it as a Firestore document ID
+        doc_id = hashlib.sha256(image.encode()).hexdigest()[:20]  # Create a short, unique ID
+
+        db.collection("rankings").document(doc_id).set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": image,
+            "image_url": image,  # Store full image URL inside the document
             "score": float(score)  # ✅ Store as float for consistency
         }, merge=True)
+
+
 
     # ✅ Display Rankings in a Table
     df = pd.DataFrame(rankings.items(), columns=["Writing Sample", "Score"])
