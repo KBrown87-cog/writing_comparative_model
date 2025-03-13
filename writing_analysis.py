@@ -176,22 +176,22 @@ if len(image_urls) >= 2:
             store_vote(img2, img1, school_name, year_group)
             st.rerun()
 
-        # ✅ Automatically store the comparison in Firestore
-        try:
-            db.collection("comparisons").add({
-                "school": school_name,
-                "year_group": year_group,
-                "image_1": img1,
-                "image_2": img2,
-                "timestamp": firestore.SERVER_TIMESTAMP
-            })
-            st.success("Comparison Stored Successfully")
-        except Exception as e:
-            st.error(f"❌ Failed to store comparison: {str(e)}")
+    # ✅ Move Firestore comparison storage **outside** the voting logic
+    try:
+        db.collection("comparisons").add({
+            "school": school_name,
+            "year_group": year_group,
+            "image_1": img1,
+            "image_2": img2,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+        st.success("Comparison Stored Successfully")
+    except Exception as e:
+        st.error(f"❌ Failed to store comparison: {str(e)}")
 
-    else:
-        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
-
+# ✅ Fix indentation for the else block
+else:
+    st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
 # ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
