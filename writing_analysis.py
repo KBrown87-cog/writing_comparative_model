@@ -89,7 +89,7 @@ if st.session_state.logged_in:
         st.session_state.rankings = []
 
         # ✅ Immediately refresh to reflect new year group selection
-        st.experimental_rerun()
+        st.rerun()
 
     # === DISPLAY + DELETE FILES (In Sidebar) === #
     st.sidebar.header("Manage Uploaded Images")
