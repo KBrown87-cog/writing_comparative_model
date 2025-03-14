@@ -87,22 +87,29 @@ if st.session_state.logged_in:
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
-        st.session_state.uploaded_files = None  # ✅ Clear uploaded files from the previous year group
-        st.rerun()  # ✅ Ensures a full refresh
+        st.session_state.uploaded_files = []  # ✅ Reset uploaded files list
+
+        # ✅ Immediately fetch images for the new year group
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
+        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
+
+        st.rerun()  # ✅ Ensures full refresh
 
     # ✅ UPLOAD WRITING SAMPLES
     st.sidebar.header("Upload Writing Samples")
-
-    # ✅ Ensure uploaded_files is cleared on year group change
-    if "uploaded_files" not in st.session_state or st.session_state.uploaded_files is None:
-        st.session_state.uploaded_files = []
 
     uploaded_files = st.sidebar.file_uploader(
         "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True
     )
 
     if uploaded_files:
-        st.session_state.uploaded_files = uploaded_files  # ✅ Store files in session state
+        # ✅ Clear previous uploaded files when switching year group
+        if "uploaded_files" in st.session_state and year_group != previous_year_group:
+            st.session_state.uploaded_files = []
 
         for uploaded_file in uploaded_files:
             try:
@@ -125,11 +132,12 @@ if st.session_state.logged_in:
                     "filename": uploaded_file.name
                 })
 
-                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
+                st.session_state.uploaded_files.append(image_url)  # ✅ Immediately add new image to session
                 st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
 
     # ✅ DISPLAY + DELETE FILES (In Sidebar)
     st.sidebar.header("Manage Uploaded Images")
@@ -184,13 +192,12 @@ if not image_urls:
     st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
     st.stop()  
 
-# ✅ Ensure only images from the selected year group are presented for comparison
-if len(image_urls) >= 2:
+# ✅ Ensure new images are presented for voting
+if len(st.session_state.image_urls) >= 2:
     st.subheader(f"Comparing Writing Samples for {year_group}")
 
-    # ✅ Generate and shuffle image pairs **only** for selected year group
     if "pairings" not in st.session_state or not st.session_state.pairings:
-        st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+        st.session_state.pairings = list(itertools.combinations(st.session_state.image_urls, 2))
         random.shuffle(st.session_state.pairings)
 
     # ✅ Process each pair one by one
@@ -201,17 +208,17 @@ if len(image_urls) >= 2:
 
         with col1:
             st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
+            if st.button(f"Select {img1}", key=f"vote_{hash(img1)}_{hash(img2)}"):
                 store_vote(img1, img2, school_name, year_group)
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
+            if st.button(f"Select {img2}", key=f"vote_{hash(img2)}_{hash(img1)}"):
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
-        # ✅ Store only year-group-specific comparisons in Firestore
+        # ✅ Automatically store the comparison in Firestore
         try:
             db.collection("comparisons").add({
                 "school": school_name,
@@ -220,17 +227,13 @@ if len(image_urls) >= 2:
                 "image_2": img2,
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-            st.success(f"Comparison Stored for {year_group}")
+            st.success(f"Comparison stored for {year_group}")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
 
     else:
-        st.warning("⚠️ No more image pairs available for comparison in this year group. Upload more images to continue.")
+        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
-
-# ✅ Fix indentation for the else block
-else:
-    st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
 # ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
