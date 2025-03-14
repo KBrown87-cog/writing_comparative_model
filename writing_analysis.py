@@ -205,8 +205,16 @@ if len(st.session_state.image_urls) >= 2:
     st.subheader(f"Compare the Writing Samples for {year_group}")
 
     if "pairings" not in st.session_state or not st.session_state.pairings:
-        st.session_state.pairings = list(itertools.combinations(st.session_state.image_urls, 2))
-        random.shuffle(st.session_state.pairings)
+    # ✅ Track how many times each image has been compared
+    image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+
+    # ✅ Generate all possible pairs
+    all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
+
+    # ✅ Sort pairs by how many times images have appeared
+    st.session_state.pairings = sorted(
+        all_pairs, key=lambda pair: image_comparison_counts[pair[0]] + image_comparison_counts[pair[1]]
+    )
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
@@ -242,11 +250,10 @@ if len(st.session_state.image_urls) >= 2:
     else:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
-# ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
     try:
-        # ✅ Generate valid Firestore document IDs
+        # ✅ Generate Firestore document IDs
         selected_doc_id = hashlib.sha256(selected_image.encode()).hexdigest()[:20]
         other_doc_id = hashlib.sha256(other_image.encode()).hexdigest()[:20]
 
@@ -264,11 +271,16 @@ def store_vote(selected_image, other_image, school_name, year_group):
         selected_score = selected_data.get("score", 0)
         other_score = other_data.get("score", 0)
         selected_votes = selected_data.get("votes", 0)
-        other_votes = other_data.get("votes", 0)
+        other_votes = other_data.get("votes", 0  
 
-        # ✅ Update Scores & Votes
-        selected_score += 1.2 / (1 + selected_score)  
-        other_score -= 0.8 / (1 + other_score)  
+        # ✅ Apply Normalization to Adjust Scores
+        K = 1.0  # ✅ Scaling Factor
+        expected_score = 1 / (1 + np.exp(other_score - selected_score))  # Expected probability
+
+        selected_score += K * (1 - expected_score)  # ✅ Adjust for winner
+        other_score -= K * expected_score  # ✅ Adjust for loser
+
+        # ✅ Track the number of times each image has been compared
         selected_votes += 1  
         other_votes += 1  
 
@@ -357,11 +369,15 @@ def bradley_terry_log_likelihood(scores, comparisons):
 
     for item1, item2, winner in comparisons:
         s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default to 0
-        p1 = np.exp(s1) / (np.exp(s1) + np.exp(s2))
-        p2 = np.exp(s2) / (np.exp(s1) + np.exp(s2))
+        exp_s1, exp_s2 = np.exp(s1), np.exp(s2)
+        p1 = exp_s1 / (exp_s1 + exp_s2)
+        p2 = exp_s2 / (exp_s1 + exp_s2)
+
+        # ✅ Apply logarithmic likelihood
         likelihood += np.log(p1 if winner == item1 else p2)
 
     return -likelihood
+
 
 # ✅ Fetch Rankings from Firestore and Apply Bradley-Terry Model
 stored_comparisons = fetch_all_comparisons(school_name, year_group)
