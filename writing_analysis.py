@@ -268,10 +268,12 @@ def store_vote(selected_image, other_image, school_name, year_group):
 def fetch_all_comparisons(school_name, year_group):
     """Retrieves all stored comparisons from Firestore for the selected year group."""
     try:
-        docs = db.collection("comparisons")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()  # ✅ Fix: Correct indentation
+        docs = (
+            db.collection("comparisons")
+            .where("school", "==", school_name)
+            .where("year_group", "==", year_group)  # ✅ Ensure only selected year group
+            .stream()  # ✅ Fix: Correct indentation and remove unnecessary backslash
+        )
 
         comparisons = []
         for doc in docs:
@@ -289,6 +291,7 @@ def fetch_all_comparisons(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
+
 
 # ✅ Calculate Rankings Using Bradley-Terry Model
 def calculate_rankings(comparisons):
