@@ -87,26 +87,23 @@ if st.session_state.logged_in:
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
-        st.session_state.uploaded_files = None  # ✅ Clear uploaded files when switching year groups
-
-        # ✅ Immediately fetch images for the new year group
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
-
-        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
-
-        st.rerun()  # ✅ Ensures full refresh
+        st.session_state.uploaded_files = None  # ✅ Clear uploaded files from the previous year group
+        st.rerun()  # ✅ Ensures a full refresh
 
     # ✅ UPLOAD WRITING SAMPLES
     st.sidebar.header("Upload Writing Samples")
+
+    # ✅ Ensure uploaded_files is cleared on year group change
+    if "uploaded_files" not in st.session_state or st.session_state.uploaded_files is None:
+        st.session_state.uploaded_files = []
 
     uploaded_files = st.sidebar.file_uploader(
         "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True
     )
 
     if uploaded_files:
+        st.session_state.uploaded_files = uploaded_files  # ✅ Store files in session state
+
         for uploaded_file in uploaded_files:
             try:
                 # ✅ Ensure correct year group is selected
@@ -128,13 +125,11 @@ if st.session_state.logged_in:
                     "filename": uploaded_file.name
                 })
 
-                # ✅ Immediately update the session state with the new images
-                st.session_state.image_urls.append(image_url)
-                st.sidebar.success(f"{uploaded_file.name} uploaded successfully.")
+                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
+                st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
-
 
     # ✅ DISPLAY + DELETE FILES (In Sidebar)
     st.sidebar.header("Manage Uploaded Images")
