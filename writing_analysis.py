@@ -75,61 +75,50 @@ if login_button:
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
+
+    # ✅ Check if the selected year group has changed
+    previous_year_group = st.session_state.get("year_group", None)  # Store previous year group
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-    if year_group:
+    if year_group != previous_year_group:
+        # ✅ Reset session state when year group changes
         st.session_state.year_group = year_group
-        st.sidebar.header("Upload Writing Samples")
+        st.session_state.image_urls = []
+        st.session_state.pairings = []
+        st.session_state.comparisons = []
+        st.session_state.rankings = []
 
-        uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        # ✅ Immediately refresh to reflect new year group selection
+        st.experimental_rerun()
 
-        if uploaded_files:
-            for uploaded_file in uploaded_files:
-                try:
-                    blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
-                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
+    # === DISPLAY + DELETE FILES (In Sidebar) === #
+    st.sidebar.header("Manage Uploaded Images")
+    try:
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
 
-                    db.collection("writing_samples").add({
-                        "school": school_name,
-                        "year_group": year_group,
-                        "image_url": image_url,
-                        "filename": uploaded_file.name
-                    })
+        image_docs = [doc for doc in docs]
 
-                    st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
-
-                except Exception as e:
-                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
-
-        # === DISPLAY + DELETE FILES (In Sidebar) === #
-        st.sidebar.header("Manage Uploaded Images")
-        try:
-            docs = db.collection("writing_samples")\
-                     .where("school", "==", school_name)\
-                     .where("year_group", "==", year_group)\
-                     .stream()
-
-            image_docs = [doc for doc in docs]
-
-            if not image_docs:
-                st.sidebar.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
-            else:
-                for doc in image_docs:
-                    data = doc.to_dict()
-                    st.sidebar.image(data["image_url"], width=100, caption=data["filename"])
-                    if school_name == "adminkbrown":
-                        if st.sidebar.button(f"🗑 Delete {data['filename']}", key=f"delete_{doc.id}_{data['filename']}"):
-                            try:
-                                blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                                blob.delete()
-                                db.collection("writing_samples").document(doc.id).delete()
-                                st.sidebar.success(f"Deleted {data['filename']}")
-                                st.rerun()
-                            except Exception as e:
-                                st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
-        except Exception as e:
-            st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
+        if not image_docs:
+            st.sidebar.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+        else:
+            for doc in image_docs:
+                data = doc.to_dict()
+                st.sidebar.image(data["image_url"], width=100, caption=data["filename"])
+                if school_name == "adminkbrown":
+                    if st.sidebar.button(f"🗑 Delete {data['filename']}", key=f"delete_{doc.id}_{data['filename']}"):
+                        try:
+                            blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
+                            blob.delete()
+                            db.collection("writing_samples").document(doc.id).delete()
+                            st.sidebar.success(f"Deleted {data['filename']}")
+                            st.rerun()
+                        except Exception as e:
+                            st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
+    except Exception as e:
+        st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
 
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
@@ -155,31 +144,30 @@ if not image_urls:
     st.stop()  # ✅ Stops execution to prevent errors
 
 # ✅ Ensure new images are presented for voting
-# ✅ Ensure new images are presented for voting
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
 
-    # ✅ Reset pairings when year group changes
-    if "prev_year_group" not in st.session_state or st.session_state.prev_year_group != year_group:
+    # ✅ Ensure pairings only contain images from the selected year group
+    if "pairings" not in st.session_state or not st.session_state.pairings or year_group != st.session_state.get("last_year_group", None):
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
-        st.session_state.prev_year_group = year_group  # Store the current year group
+        st.session_state.last_year_group = year_group  # ✅ Store last year group selection
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)  
 
         with col1:
             st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}_{year_group}"):
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}_{year_group}"):  # ✅ Ensure unique key per year group
                 store_vote(img1, img2, school_name, year_group)
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}_{year_group}"):
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}_{year_group}"):  # ✅ Ensure unique key per year group
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
@@ -195,7 +183,6 @@ if len(image_urls) >= 2:
             st.success("Comparison Stored Successfully")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
-
     else:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
 
@@ -257,26 +244,30 @@ def store_vote(selected_image, other_image, school_name, year_group):
 
 # ✅ Fetch all stored comparisons from Firestore
 def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored comparisons from Firestore."""
+    """Retrieves all stored comparisons from Firestore for the selected year group."""
     try:
-        docs = db.collection("comparisons").where("school", "==", school_name)\
-                                           .where("year_group", "==", year_group)\
-                                           .stream()
+        docs = db.collection("comparisons")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
         comparisons = []
         for doc in docs:
             data = doc.to_dict()
-            img1 = data.get("image_1")
-            img2 = data.get("image_2")
-            if img1 and img2:
-                comparisons.append((img1, img2, img1))  # ✅ Ensuring correct tuple format
+            if data.get("year_group") == year_group:  # ✅ Ensure only selected year group comparisons appear
+                img1 = data.get("image_1")
+                img2 = data.get("image_2")
+                if img1 and img2:
+                    comparisons.append((img1, img2, img1))  # ✅ Ensure correct format
 
         if not comparisons:
-            st.warning("⚠️ No comparisons found in Firestore!")
+            st.warning("⚠️ No comparisons found for the selected year group.")
 
         return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
+
 
 def calculate_rankings(comparisons):
     """Applies Bradley-Terry Model to rank images."""
@@ -345,9 +336,7 @@ def fetch_ranked_images(school_name, year_group):
         scores = []
         for doc in docs:
             data = doc.to_dict()
-            
-            # 🔥 Extra check to ensure filtering works
-            if data.get("year_group") == year_group:  
+            if data.get("year_group") == year_group:  # ✅ Ensure only selected year group rankings appear
                 scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
 
         # ✅ Sort images by score (higher score = better ranking)
@@ -356,6 +345,7 @@ def fetch_ranked_images(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
+
 
 
 # ✅ Now call `fetch_ranked_images` at the correct location
