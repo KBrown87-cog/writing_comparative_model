@@ -271,16 +271,16 @@ def fetch_all_comparisons(school_name, year_group):
         docs = db.collection("comparisons")\
                  .where("school", "==", school_name)\
                  .where("year_group", "==", year_group)\
-                 .stream()
+                 .stream()  # ✅ Fix: Correct indentation
 
         comparisons = []
         for doc in docs:
             data = doc.to_dict()
-            if data.get("year_group") == year_group:  # ✅ Ensure only selected year group comparisons appear
-                img1 = data.get("image_1")
-                img2 = data.get("image_2")
-                if img1 and img2:
-                    comparisons.append((img1, img2, img1))  # ✅ Ensure correct format
+            img1 = data.get("image_1")
+            img2 = data.get("image_2")
+            winner = data.get("winner")  # ✅ Fetch winning image if stored separately
+            if img1 and img2 and winner:
+                comparisons.append((img1, img2, winner))  # ✅ Store proper format
 
         if not comparisons:
             st.warning("⚠️ No comparisons found for the selected year group.")
@@ -290,7 +290,7 @@ def fetch_all_comparisons(school_name, year_group):
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
 
-
+# ✅ Calculate Rankings Using Bradley-Terry Model
 def calculate_rankings(comparisons):
     """Applies Bradley-Terry Model to rank images."""
     if not comparisons:
@@ -309,6 +309,7 @@ def calculate_rankings(comparisons):
     except Exception as e:
         st.error(f"❌ Ranking Calculation Failed: {str(e)}")
         return {}
+
 
 
 # ✅ Bradley-Terry Model for Ranking
