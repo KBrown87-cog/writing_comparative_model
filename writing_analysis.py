@@ -53,23 +53,31 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.school_name = ""
     st.session_state.year_group = ""
-    st.session_state.comparisons = []
-    st.session_state.image_counts = {}
-    st.session_state.scores = {}
+    st.session_state.image_urls = []
     st.session_state.pairings = []
+    st.session_state.comparisons = []
+    st.session_state.rankings = []
+    st.session_state.uploaded_files = []
 
-# === SIDEBAR LOGIN === #
-school_name = st.sidebar.text_input("Enter School Name")
-password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
-login_button = st.sidebar.button("Login")
-
-if login_button:
-    if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
-        st.session_state.logged_in = True
-        st.session_state.school_name = school_name
-        st.sidebar.success(f"Logged in as {school_name}")
-    else:
-        st.sidebar.error("Invalid credentials")
+# === LOGIN / LOGOUT SYSTEM === #
+if not st.session_state.logged_in:
+    st.sidebar.header("Login")
+    school_name = st.sidebar.text_input("Enter School Name")
+    password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
+    
+    if st.sidebar.button("Login"):
+        if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
+            st.session_state.logged_in = True
+            st.session_state.school_name = school_name
+            st.sidebar.success(f"Logged in as {school_name}")
+            st.rerun()  # ✅ Refresh to ensure proper state
+        else:
+            st.sidebar.error("Invalid credentials")
+else:
+    st.sidebar.header(f"Logged in as {st.session_state.school_name}")
+    if st.sidebar.button("Logout"):
+        st.session_state.clear()  # ✅ Clears all session state data
+        st.rerun()  # ✅ Refresh the page to return to login screen
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
@@ -98,6 +106,7 @@ if st.session_state.logged_in:
         st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
 
         st.rerun()  # ✅ Ensures full refresh
+
 
     # ✅ UPLOAD WRITING SAMPLES
     st.sidebar.header("Upload Writing Samples")
@@ -193,7 +202,7 @@ if not image_urls:
 
 # ✅ Ensure new images are presented for voting
 if len(st.session_state.image_urls) >= 2:
-    st.subheader(f"Comparing Writing Samples for {year_group}")
+    st.subheader(f"Compare the Writing Samples for {year_group}")
 
     if "pairings" not in st.session_state or not st.session_state.pairings:
         st.session_state.pairings = list(itertools.combinations(st.session_state.image_urls, 2))
