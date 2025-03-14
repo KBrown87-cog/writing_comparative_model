@@ -147,18 +147,19 @@ if st.session_state.logged_in:
 # ✅ Fetch images from Firestore for the selected year group
 image_urls = []
 try:
-    docs = db.collection("writing_samples")\
-             .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\  
-             .stream()
+    docs = db.collection("writing_samples") \
+             .where("school", "==", school_name) \
+             .where("year_group", "==", year_group) \
+             .stream()  # ✅ Removed the incorrect trailing backslash
 
     for doc in docs:
         data = doc.to_dict()
         if "image_url" in data:
-            image_urls.append(data["image_url"])  
+            image_urls.append(data["image_url"])  # ✅ Ensure only selected year group images are collected
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
 
 # ✅ Prevent error if no images exist for the selected year group
 if not image_urls:
