@@ -77,7 +77,7 @@ if st.session_state.logged_in:
     st.sidebar.header("Select Year Group")
 
     # ✅ Check if the selected year group has changed
-    previous_year_group = st.session_state.get("year_group", None)  # Store previous year group
+    previous_year_group = st.session_state.get("year_group", None)  
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
     if year_group != previous_year_group:
@@ -149,13 +149,13 @@ image_urls = []
 try:
     docs = db.collection("writing_samples")\
              .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\  # ✅ Ensure only selected year group
+             .where("year_group", "==", year_group)\  
              .stream()
 
     for doc in docs:
         data = doc.to_dict()
         if "image_url" in data:
-            image_urls.append(data["image_url"])  # ✅ Collect only images from selected year group
+            image_urls.append(data["image_url"])  
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
@@ -163,7 +163,7 @@ except Exception as e:
 # ✅ Prevent error if no images exist for the selected year group
 if not image_urls:
     st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
-    st.stop()  # ✅ Stops execution to prevent errors
+    st.stop()  
 
 # ✅ Ensure only images from the selected year group are presented for comparison
 if len(image_urls) >= 2:
@@ -238,10 +238,10 @@ def store_vote(selected_image, other_image, school_name, year_group):
         other_votes = other_data.get("votes", 0)
 
         # ✅ Update Scores & Votes
-        selected_score += 1.2 / (1 + selected_score)  # Reward selected image
-        other_score -= 0.8 / (1 + other_score)  # Penalize non-selected image
-        selected_votes += 1  # Count how many times selected
-        other_votes += 1  # Count how many times other was in a vote
+        selected_score += 1.2 / (1 + selected_score)  
+        other_score -= 0.8 / (1 + other_score)  
+        selected_votes += 1  
+        other_votes += 1  
 
         # ✅ Update Firestore with new values
         selected_ref.set({
@@ -280,17 +280,19 @@ def fetch_all_comparisons(school_name, year_group):
             data = doc.to_dict()
             img1 = data.get("image_1")
             img2 = data.get("image_2")
-            winner = data.get("winner")  # ✅ Fetch winning image if stored separately
-            if img1 and img2 and winner:
+            winner = data.get("winner", img1)  # ✅ Default to img1 if no explicit winner stored
+
+            if img1 and img2:
                 comparisons.append((img1, img2, winner))  # ✅ Store proper format
 
         if not comparisons:
-            st.warning("⚠️ No comparisons found for the selected year group.")
+            st.info("ℹ️ No comparisons found for the selected year group yet. Start making comparisons!")
 
         return comparisons
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
+
 
 
 # ✅ Calculate Rankings Using Bradley-Terry Model
