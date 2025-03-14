@@ -87,7 +87,7 @@ if st.session_state.logged_in:
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
-        st.session_state.uploaded_files = []  # ✅ Reset uploaded files list
+        st.session_state.uploaded_files = []  # ✅ Clear uploaded files
 
         # ✅ Immediately fetch images for the new year group
         docs = db.collection("writing_samples")\
@@ -103,14 +103,10 @@ if st.session_state.logged_in:
     st.sidebar.header("Upload Writing Samples")
 
     uploaded_files = st.sidebar.file_uploader(
-        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True
+        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
     )
 
     if uploaded_files:
-        # ✅ Clear previous uploaded files when switching year group
-        if "uploaded_files" in st.session_state and year_group != previous_year_group:
-            st.session_state.uploaded_files = []
-
         for uploaded_file in uploaded_files:
             try:
                 # ✅ Ensure correct year group is selected
@@ -132,15 +128,16 @@ if st.session_state.logged_in:
                     "filename": uploaded_file.name
                 })
 
-                st.session_state.uploaded_files.append(image_url)  # ✅ Immediately add new image to session
+                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
+                st.session_state.uploaded_files.append(uploaded_file.name)  # ✅ Store filenames
                 st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
+    # ✅ DISPLAY & DELETE FILES (PER YEAR GROUP)
+    st.sidebar.header(f"Manage Uploaded Images for {year_group}")
 
-    # ✅ DISPLAY + DELETE FILES (In Sidebar)
-    st.sidebar.header("Manage Uploaded Images")
     try:
         docs = db.collection("writing_samples")\
                  .where("school", "==", school_name)\
@@ -150,7 +147,7 @@ if st.session_state.logged_in:
         image_docs = [doc for doc in docs]
 
         if not image_docs:
-            st.sidebar.warning("⚠️ No images found in Firestore! Check if Firestore is enabled and has data.")
+            st.sidebar.warning(f"⚠️ No images found for {year_group}. Upload images to start comparisons.")
         else:
             for doc in image_docs:
                 data = doc.to_dict()
@@ -165,26 +162,28 @@ if st.session_state.logged_in:
                             st.rerun()
                         except Exception as e:
                             st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
+
     except Exception as e:
         st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
 
 
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
-# ✅ Fetch images from Firestore for the selected year group
+# ✅ Fetch images for the selected year group only
 image_urls = []
 try:
-    docs = db.collection("writing_samples") \
-             .where("school", "==", school_name) \
-             .where("year_group", "==", year_group) \
-             .stream()  # ✅ Removed the incorrect trailing backslash
+    docs = db.collection("writing_samples")\
+             .where("school", "==", school_name)\
+             .where("year_group", "==", st.session_state.year_group)\
+             .stream()
 
     for doc in docs:
         data = doc.to_dict()
         if "image_url" in data:
-            image_urls.append(data["image_url"])  # ✅ Ensure only selected year group images are collected
+            image_urls.append(data["image_url"])
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
+
 
 
 # ✅ Prevent error if no images exist for the selected year group
