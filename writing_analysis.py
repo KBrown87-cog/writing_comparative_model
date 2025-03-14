@@ -87,6 +87,7 @@ if st.session_state.logged_in:
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
+        st.session_state.uploaded_files = None  # ✅ Clear uploaded files when switching year groups
 
         # ✅ Immediately fetch images for the new year group
         docs = db.collection("writing_samples")\
@@ -127,15 +128,15 @@ if st.session_state.logged_in:
                     "filename": uploaded_file.name
                 })
 
-                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
-                st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
+                # ✅ Immediately update the session state with the new images
+                st.session_state.image_urls.append(image_url)
+                st.sidebar.success(f"{uploaded_file.name} uploaded successfully.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
 
-
-    # === DISPLAY + DELETE FILES (In Sidebar) === #
+    # ✅ DISPLAY + DELETE FILES (In Sidebar)
     st.sidebar.header("Manage Uploaded Images")
     try:
         docs = db.collection("writing_samples")\
