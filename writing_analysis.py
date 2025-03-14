@@ -76,31 +76,50 @@ if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
 
-    # ✅ Check if the selected year group has changed
-    previous_year_group = st.session_state.get("year_group", None)  
+    # ✅ Detect Year Group Change
+    previous_year_group = st.session_state.get("year_group", None)
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
     if year_group != previous_year_group:
-        # ✅ Reset session state when year group changes
+        # ✅ Reset session state when switching year groups
         st.session_state.year_group = year_group
         st.session_state.image_urls = []
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
-        st.rerun()  # ✅ Refresh the page to reflect the selected year group
 
-    # === UPLOAD WRITING SAMPLES (Re-Added) === #
+        # ✅ Immediately fetch images for the new year group
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
+        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
+
+        st.rerun()  # ✅ Ensures full refresh
+
+    # ✅ UPLOAD WRITING SAMPLES
     st.sidebar.header("Upload Writing Samples")
 
-    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True
+    )
 
     if uploaded_files:
         for uploaded_file in uploaded_files:
             try:
+                # ✅ Ensure correct year group is selected
+                year_group = st.session_state.get("year_group", None)
+                if not year_group:
+                    st.error("⚠️ Please select a year group before uploading images.")
+                    st.stop()
+
+                # ✅ Upload to Firebase Storage
                 blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                 blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                 image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
 
+                # ✅ Store in Firestore
                 db.collection("writing_samples").add({
                     "school": school_name,
                     "year_group": year_group,
@@ -108,10 +127,13 @@ if st.session_state.logged_in:
                     "filename": uploaded_file.name
                 })
 
+                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
                 st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+
 
     # === DISPLAY + DELETE FILES (In Sidebar) === #
     st.sidebar.header("Manage Uploaded Images")
