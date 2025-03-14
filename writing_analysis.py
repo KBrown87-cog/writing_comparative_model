@@ -87,9 +87,31 @@ if st.session_state.logged_in:
         st.session_state.pairings = []
         st.session_state.comparisons = []
         st.session_state.rankings = []
+        st.rerun()  # ✅ Refresh the page to reflect the selected year group
 
-        # ✅ Immediately refresh to reflect new year group selection
-        st.rerun()
+    # === UPLOAD WRITING SAMPLES (Re-Added) === #
+    st.sidebar.header("Upload Writing Samples")
+
+    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            try:
+                blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
+                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
+
+                db.collection("writing_samples").add({
+                    "school": school_name,
+                    "year_group": year_group,
+                    "image_url": image_url,
+                    "filename": uploaded_file.name
+                })
+
+                st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
+
+            except Exception as e:
+                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
     # === DISPLAY + DELETE FILES (In Sidebar) === #
     st.sidebar.header("Manage Uploaded Images")
