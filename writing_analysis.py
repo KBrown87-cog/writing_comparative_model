@@ -207,13 +207,13 @@ if len(st.session_state.image_urls) >= 2:
 
         with col1:
             st.image(img1, use_container_width=True)
-            if st.button(f"Select {img1}", key=f"vote_{hash(img1)}_{hash(img2)}"):
+            if st.button("Select this image", key=f"vote_{img1}_{img2}"):  # ✅ Fixed button key formatting
                 store_vote(img1, img2, school_name, year_group)
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
-            if st.button(f"Select {img2}", key=f"vote_{hash(img2)}_{hash(img1)}"):
+            if st.button("Select this image", key=f"vote_{img2}_{img1}"):  # ✅ Fixed button key formatting
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
@@ -232,7 +232,6 @@ if len(st.session_state.image_urls) >= 2:
 
     else:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
-
 
 # ✅ Store votes in Firestore correctly
 def store_vote(selected_image, other_image, school_name, year_group):
