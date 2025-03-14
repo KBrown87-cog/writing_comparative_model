@@ -144,56 +144,55 @@ if st.session_state.logged_in:
 
 
 # === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
-# ✅ Fetch images from Firestore to compare
+# ✅ Fetch images from Firestore for the selected year group
 image_urls = []
 try:
     docs = db.collection("writing_samples")\
              .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\
+             .where("year_group", "==", year_group)\  # ✅ Ensure only selected year group
              .stream()
 
     for doc in docs:
         data = doc.to_dict()
         if "image_url" in data:
-            image_urls.append(data["image_url"])  # ✅ Collect valid image URLs
+            image_urls.append(data["image_url"])  # ✅ Collect only images from selected year group
 
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
-# ✅ Prevent error if no images exist
+# ✅ Prevent error if no images exist for the selected year group
 if not image_urls:
-    st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
+    st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-# ✅ Ensure new images are presented for voting
+# ✅ Ensure only images from the selected year group are presented for comparison
 if len(image_urls) >= 2:
-    st.subheader("Comparing Writing Samples")
+    st.subheader(f"Comparing Writing Samples for {year_group}")
 
-    # ✅ Ensure pairings only contain images from the selected year group
-    if "pairings" not in st.session_state or not st.session_state.pairings or year_group != st.session_state.get("last_year_group", None):
+    # ✅ Generate and shuffle image pairs **only** for selected year group
+    if "pairings" not in st.session_state or not st.session_state.pairings:
         st.session_state.pairings = list(itertools.combinations(image_urls, 2))
         random.shuffle(st.session_state.pairings)
-        st.session_state.last_year_group = year_group  # ✅ Store last year group selection
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
         img1, img2 = st.session_state.pairings.pop(0)
 
-        col1, col2 = st.columns(2)  
+        col1, col2 = st.columns(2)
 
         with col1:
             st.image(img1, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img1}_{img2}_{year_group}"):  # ✅ Ensure unique key per year group
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
                 store_vote(img1, img2, school_name, year_group)
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
-            if st.button("Select this Image", key=f"vote_{img2}_{img1}_{year_group}"):  # ✅ Ensure unique key per year group
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
-        # ✅ Automatically store the comparison in Firestore
+        # ✅ Store only year-group-specific comparisons in Firestore
         try:
             db.collection("comparisons").add({
                 "school": school_name,
@@ -202,11 +201,12 @@ if len(image_urls) >= 2:
                 "image_2": img2,
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-            st.success("Comparison Stored Successfully")
+            st.success(f"Comparison Stored for {year_group}")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
+
     else:
-        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
+        st.warning("⚠️ No more image pairs available for comparison in this year group. Upload more images to continue.")
 
 
 # ✅ Fix indentation for the else block
