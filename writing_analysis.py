@@ -155,6 +155,7 @@ if not image_urls:
     st.stop()  # ✅ Stops execution to prevent errors
 
 # ✅ Ensure new images are presented for voting
+# ✅ Ensure new images are presented for voting
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
 
