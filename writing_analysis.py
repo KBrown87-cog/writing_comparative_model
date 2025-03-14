@@ -154,40 +154,50 @@ if not image_urls:
     st.warning("⚠️ No images found in Firestore. Upload images to start comparisons.")
     st.stop()  # ✅ Stops execution to prevent errors
 
-# ✅ Ensure only images from the selected year group are presented
+# ✅ Ensure new images are presented for voting
 if len(image_urls) >= 2:
     st.subheader("Comparing Writing Samples")
 
-    pairings = list(itertools.combinations(image_urls, 2))
-    random.shuffle(pairings)
-    img1, img2 = pairings.pop(0)
+    # ✅ Reset pairings when year group changes
+    if "prev_year_group" not in st.session_state or st.session_state.prev_year_group != year_group:
+        st.session_state.pairings = list(itertools.combinations(image_urls, 2))
+        random.shuffle(st.session_state.pairings)
+        st.session_state.prev_year_group = year_group  # Store the current year group
 
-    col1, col2 = st.columns(2)
+    # ✅ Process each pair one by one
+    if st.session_state.pairings:
+        img1, img2 = st.session_state.pairings.pop(0)
 
-    with col1:
-        st.image(img1, use_container_width=True)
-        if st.button("Select this Image", key=f"vote_{img1}_{img2}"):
-            store_vote(img1, img2, school_name, year_group)
-            st.rerun()
+        col1, col2 = st.columns(2)
 
-    with col2:
-        st.image(img2, use_container_width=True)
-        if st.button("Select this Image", key=f"vote_{img2}_{img1}"):
-            store_vote(img2, img1, school_name, year_group)
-            st.rerun()
+        with col1:
+            st.image(img1, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img1}_{img2}_{year_group}"):
+                store_vote(img1, img2, school_name, year_group)
+                st.rerun()
 
-    # ✅ Move Firestore comparison storage **outside** the voting logic
-    try:
-        db.collection("comparisons").add({
-            "school": school_name,
-            "year_group": year_group,
-            "image_1": img1,
-            "image_2": img2,
-            "timestamp": firestore.SERVER_TIMESTAMP
-        })
-        st.success("Comparison Stored Successfully")
-    except Exception as e:
-        st.error(f"❌ Failed to store comparison: {str(e)}")
+        with col2:
+            st.image(img2, use_container_width=True)
+            if st.button("Select this Image", key=f"vote_{img2}_{img1}_{year_group}"):
+                store_vote(img2, img1, school_name, year_group)
+                st.rerun()
+
+        # ✅ Automatically store the comparison in Firestore
+        try:
+            db.collection("comparisons").add({
+                "school": school_name,
+                "year_group": year_group,
+                "image_1": img1,
+                "image_2": img2,
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+            st.success("Comparison Stored Successfully")
+        except Exception as e:
+            st.error(f"❌ Failed to store comparison: {str(e)}")
+
+    else:
+        st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
+
 
 # ✅ Fix indentation for the else block
 else:
