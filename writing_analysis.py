@@ -193,29 +193,39 @@ try:
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
-
-
 # ✅ Prevent error if no images exist for the selected year group
 if not image_urls:
     st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
-    st.stop()  
+    st.stop()
 
 # ✅ Ensure new images are presented for voting
 if len(st.session_state.image_urls) >= 2:
     st.subheader(f"Compare the Writing Samples for {year_group}")
 
-    # ✅ Initialize comparison tracking if not already in session state
+    # ✅ Preserve existing counts instead of resetting
     if "image_comparison_counts" not in st.session_state:
-        st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+        st.session_state.image_comparison_counts = {}
+
+    # ✅ Ensure all images have a count (without resetting existing values)
+    for img in st.session_state.image_urls:
+        if img not in st.session_state.image_comparison_counts:
+            st.session_state.image_comparison_counts[img] = 0
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
 
-    # ✅ Ensure each image appears equally by sorting pairs based on previous comparison count
-    st.session_state.pairings = sorted(
-        all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
-                                    st.session_state.image_comparison_counts.get(pair[1], 0)
-    )
+    # ✅ Ensure sorting only occurs if dictionary exists
+    if st.session_state.image_comparison_counts:
+        st.session_state.pairings = sorted(
+            all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
+                                        st.session_state.image_comparison_counts.get(pair[1], 0)
+        )
+    else:
+        st.session_state.pairings = all_pairs  # Fallback if the dictionary is empty
+
+    # ✅ Debugging Output
+    st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
+    st.write("DEBUG: All Pairs:", all_pairs)
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
