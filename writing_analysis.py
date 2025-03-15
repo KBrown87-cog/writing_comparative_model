@@ -271,7 +271,7 @@ def store_vote(selected_image, other_image, school_name, year_group):
         selected_score = selected_data.get("score", 0)
         other_score = other_data.get("score", 0)
         selected_votes = selected_data.get("votes", 0)
-        other_votes = other_data.get("votes", 0  
+        other_votes = other_data.get("votes", 0)  
 
         # ✅ Apply Normalization to Adjust Scores
         K = 1.0  # ✅ Scaling Factor
