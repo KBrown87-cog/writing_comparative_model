@@ -208,24 +208,16 @@ if len(st.session_state.image_urls) >= 2:
 
     # ✅ Ensure all images have a count (without resetting existing values)
     for img in st.session_state.image_urls:
-        if img not in st.session_state.image_comparison_counts:
-            st.session_state.image_comparison_counts[img] = 0
+        st.session_state.image_comparison_counts.setdefault(img, 0)
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
 
-    # ✅ Ensure sorting only occurs if dictionary exists
-    if st.session_state.image_comparison_counts:
-        st.session_state.pairings = sorted(
-            all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
-                                        st.session_state.image_comparison_counts.get(pair[1], 0)
-        )
-    else:
-        st.session_state.pairings = all_pairs  # Fallback if the dictionary is empty
-
-    # ✅ Debugging Output
-    st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
-    st.write("DEBUG: All Pairs:", all_pairs)
+    # ✅ Sort pairs by least compared images first (ensuring fairness)
+    st.session_state.pairings = sorted(
+        all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
+                                    st.session_state.image_comparison_counts.get(pair[1], 0)
+    )
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
@@ -258,13 +250,11 @@ if len(st.session_state.image_urls) >= 2:
                 "image_2": img2,
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-            st.success(f"Comparison stored for {year_group}")
         except Exception as e:
             st.error(f"❌ Failed to store comparison: {str(e)}")
 
     else:
         st.warning("⚠️ No more image pairs available for comparison. Upload more images to continue.")
-
 
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
