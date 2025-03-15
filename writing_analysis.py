@@ -57,14 +57,18 @@ if "logged_in" not in st.session_state:
     st.session_state.pairings = []
     st.session_state.comparisons = []
     st.session_state.rankings = []
-    st.session_state.uploaded_files = []
+    st.session_state.image_comparison_counts = {}
 
 # === LOGIN / LOGOUT SYSTEM === #
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.school_name = ""
+
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
     school_name = st.sidebar.text_input("Enter School Name")
     password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
-    
+
     if st.sidebar.button("Login"):
         if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
             st.session_state.logged_in = True
@@ -73,11 +77,13 @@ if not st.session_state.logged_in:
             st.rerun()  # ✅ Refresh to ensure proper state
         else:
             st.sidebar.error("Invalid credentials")
+
 else:
     st.sidebar.header(f"Logged in as {st.session_state.school_name}")
     if st.sidebar.button("Logout"):
         st.session_state.clear()  # ✅ Clears all session state data
         st.rerun()  # ✅ Refresh the page to return to login screen
+
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
@@ -85,27 +91,33 @@ if st.session_state.logged_in:
     st.sidebar.header("Select Year Group")
 
     # ✅ Detect Year Group Change
-    previous_year_group = st.session_state.get("year_group", None)
-    year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
+previous_year_group = st.session_state.get("year_group", None)
+year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-    if year_group != previous_year_group:
-        # ✅ Reset session state when switching year groups
-        st.session_state.year_group = year_group
-        st.session_state.image_urls = []
-        st.session_state.pairings = []
-        st.session_state.comparisons = []
-        st.session_state.rankings = []
-        st.session_state.uploaded_files = []  # ✅ Clear uploaded files
+if year_group != previous_year_group:
+    # ✅ Reset session state when switching year groups
+    st.session_state.year_group = year_group
+    st.session_state.image_urls = []
+    st.session_state.pairings = []
+    st.session_state.comparisons = []
+    st.session_state.rankings = []
+    st.session_state.uploaded_files = []  # ✅ Clear uploaded files
+    st.session_state.image_comparison_counts = {}  # ✅ Reset comparison tracking
 
-        # ✅ Immediately fetch images for the new year group
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
+    # ✅ Fetch images for the selected year group (without triggering an immediate page rerun)
+    docs = db.collection("writing_samples")\
+             .where("school", "==", school_name)\
+             .where("year_group", "==", year_group)\
+             .stream()
 
-        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
+    st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
 
-        st.rerun()  # ✅ Ensures full refresh
+    # ✅ Refresh image comparison tracking
+    for img in st.session_state.image_urls:
+        st.session_state.image_comparison_counts[img] = 0
+
+    st.experimental_rerun()  # ✅ Ensures full refresh after setting values
+
 
 
     # ✅ UPLOAD WRITING SAMPLES
