@@ -206,7 +206,7 @@ if len(st.session_state.image_urls) >= 2:
 
     if "pairings" not in st.session_state or not st.session_state.pairings:
     # ✅ Track how many times each image has been compared
-    image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+        image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
