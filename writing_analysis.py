@@ -206,15 +206,21 @@ if len(st.session_state.image_urls) >= 2:
 
     if "pairings" not in st.session_state or not st.session_state.pairings:
     # ✅ Track how many times each image has been compared
-        image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+    image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
 
+    # ✅ Fix: Ensure each image exists in the dictionary before sorting
+    for pair in all_pairs:
+    image_comparison_counts.setdefault(pair[0], 0)
+    image_comparison_counts.setdefault(pair[1], 0)
+
     # ✅ Sort pairs by how many times images have appeared
     st.session_state.pairings = sorted(
-        all_pairs, key=lambda pair: image_comparison_counts[pair[0]] + image_comparison_counts[pair[1]]
+    all_pairs, key=lambda pair: image_comparison_counts.get(pair[0], 0) + image_comparison_counts.get(pair[1], 0)
     )
+
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
