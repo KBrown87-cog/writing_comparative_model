@@ -204,21 +204,23 @@ if not image_urls:
 if len(st.session_state.image_urls) >= 2:
     st.subheader(f"Compare the Writing Samples for {year_group}")
 
-    if "pairings" not in st.session_state or not st.session_state.pairings:
-        # ✅ Track how many times each image has been compared
-        image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+    # ✅ Initialize tracking dictionary only if it doesn't exist
+    if "image_comparison_counts" not in st.session_state:
+        st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
 
+    if "pairings" not in st.session_state or not st.session_state.pairings:
         # ✅ Generate all possible pairs
         all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
 
-        # ✅ Fix: Ensure each image exists in the dictionary before sorting
+        # ✅ Ensure each image exists in the dictionary before sorting
         for pair in all_pairs:
-            image_comparison_counts.setdefault(pair[0], 0)
-            image_comparison_counts.setdefault(pair[1], 0)
+            st.session_state.image_comparison_counts.setdefault(pair[0], 0)
+            st.session_state.image_comparison_counts.setdefault(pair[1], 0)
 
         # ✅ Sort pairs by how many times images have appeared
         st.session_state.pairings = sorted(
-            all_pairs, key=lambda pair: image_comparison_counts.get(pair[0], 0) + image_comparison_counts.get(pair[1], 0)
+            all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
+                                        st.session_state.image_comparison_counts.get(pair[1], 0)
         )
 
     # ✅ Process each pair one by one
@@ -231,17 +233,18 @@ if len(st.session_state.image_urls) >= 2:
             st.image(img1, use_container_width=True)
             if st.button(f"Select this image", key=f"vote_{img1}_{img2}"):  
                 store_vote(img1, img2, school_name, year_group)
-                image_comparison_counts[img1] += 1
-                image_comparison_counts[img2] += 1  # ✅ Update count
+                st.session_state.image_comparison_counts[img1] += 1  # ✅ Track appearances
+                st.session_state.image_comparison_counts[img2] += 1
                 st.rerun()
 
         with col2:
             st.image(img2, use_container_width=True)
             if st.button(f"Select this image", key=f"vote_{img2}_{img1}"):  
                 store_vote(img2, img1, school_name, year_group)
-                image_comparison_counts[img1] += 1
-                image_comparison_counts[img2] += 1  # ✅ Update count
+                st.session_state.image_comparison_counts[img1] += 1  # ✅ Track appearances
+                st.session_state.image_comparison_counts[img2] += 1
                 st.rerun()
+
 
 
         # ✅ Automatically store the comparison in Firestore
