@@ -199,8 +199,12 @@ try:
 except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
+# ✅ Ensure image_urls is in session state
+if "image_urls" not in st.session_state or not isinstance(st.session_state.image_urls, list):
+    st.session_state.image_urls = []
+
 # ✅ Prevent error if no images exist for the selected year group
-if not image_urls:
+if not st.session_state.image_urls:
     st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
     st.stop()
 
@@ -209,12 +213,16 @@ if len(st.session_state.image_urls) >= 2:
     st.subheader(f"Compare the Writing Samples for {year_group}")
 
     # ✅ Preserve existing counts instead of resetting
-    if "image_comparison_counts" not in st.session_state:
+    if "image_comparison_counts" not in st.session_state or not isinstance(st.session_state.image_comparison_counts, dict):
         st.session_state.image_comparison_counts = {}
 
     # ✅ Ensure all images have a count (without resetting existing values)
     for img in st.session_state.image_urls:
         st.session_state.image_comparison_counts.setdefault(img, 0)
+
+    # ✅ Debugging output to check values
+    st.write("DEBUG: Image URLs:", st.session_state.image_urls)
+    st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
@@ -246,6 +254,7 @@ if len(st.session_state.image_urls) >= 2:
             if st.button(f"Select this image", key=f"vote_{img2}_{img1}"):
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
+
 
         # ✅ Automatically store the comparison in Firestore
         try:
