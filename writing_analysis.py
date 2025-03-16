@@ -11,8 +11,7 @@ import json
 import os
 
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
-if "debug_mode" not in st.session_state:
-    st.session_state.debug_mode = False  # Change to True if you need debugging output
+st.session_state.setdefault("debug_mode", False)  # Keeps previous state
 
 # ✅ Prevent duplicate Firebase initialization
 if not firebase_admin._apps:
@@ -53,15 +52,14 @@ SCHOOL_CREDENTIALS = {
 }
 
 # === SESSION STATE INITIALIZATION === #
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.school_name = ""
-    st.session_state.year_group = ""
-    st.session_state.image_urls = []
-    st.session_state.pairings = []
-    st.session_state.comparisons = []
-    st.session_state.rankings = []
-    st.session_state.image_comparison_counts = {}
+st.session_state.setdefault("logged_in", False)
+st.session_state.setdefault("school_name", "")
+st.session_state.setdefault("year_group", "")
+st.session_state.setdefault("image_urls", [])
+st.session_state.setdefault("pairings", [])
+st.session_state.setdefault("comparisons", [])
+st.session_state.setdefault("rankings", [])
+st.session_state.setdefault("image_comparison_counts", {})
 
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
@@ -73,84 +71,55 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.school_name = school_name
             st.sidebar.success(f"Logged in as {school_name}")
-            st.rerun()  # ✅ Refresh to ensure proper state
+            st.rerun()
         else:
             st.sidebar.error("Invalid credentials")
 
 else:
     st.sidebar.header(f"Logged in as {st.session_state.school_name}")
     if st.sidebar.button("Logout"):
-        st.session_state.clear()  # ✅ Clears all session state data
-        st.rerun()  # ✅ Refresh the page to return to login screen
-
+        st.session_state.clear()
+        st.rerun()
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
-
-    # ✅ Detect Year Group Change
-    previous_year_group = st.session_state.get("year_group", None)
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-    if year_group != previous_year_group:
-    st.session_state.clear()  # ✅ Clears everything safely
-    st.session_state.year_group = year_group
-    st.session_state.image_urls = []
-    st.session_state.image_comparison_counts = {}
-
-    # ✅ Fetch images for the selected year group
-    docs = db.collection("writing_samples")\
-             .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\
-             .stream()
-
-    st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
-
-    if not st.session_state.image_urls:
-        st.warning(f"⚠️ No images found for {year_group}. Upload images to start comparisons.")
-
-    st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
-
-    st.rerun()  # ✅ Ensures page refresh **only if needed**
-
-
-
-    # ✅ UPLOAD WRITING SAMPLES
+    if year_group != st.session_state.year_group:
+        st.session_state.clear()
+        st.session_state.year_group = year_group
+        st.session_state.image_urls = []
+        st.session_state.image_comparison_counts = {}
+        docs = db.collection("writing_samples")\
+                 .where(filter=firestore.FieldFilter("school", "==", school_name))\
+                 .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+                 .stream()
+        st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
+        st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+        st.rerun()
+    
     st.sidebar.header("Upload Writing Samples")
-
-    uploaded_files = st.sidebar.file_uploader(
-        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
-    )
-
+    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
+    
     if uploaded_files:
         for uploaded_file in uploaded_files:
             try:
-                # ✅ Ensure correct year group is selected
-                year_group = st.session_state.get("year_group", None)
-                if not year_group:
-                    st.error("⚠️ Please select a year group before uploading images.")
-                    st.stop()
-
-                # ✅ Upload to Firebase Storage
                 blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
                 blob.upload_from_file(uploaded_file, content_type="image/jpeg")
                 image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
-
-                # ✅ Store in Firestore
                 db.collection("writing_samples").add({
                     "school": school_name,
                     "year_group": year_group,
                     "image_url": image_url,
                     "filename": uploaded_file.name
                 })
-
-                st.session_state.image_urls.append(image_url)  # ✅ Immediately add new image to session
-                st.session_state.uploaded_files.append(uploaded_file.name)  # ✅ Store filenames
+                st.session_state.image_urls.append(image_url)
                 st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
-
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
 
     # ✅ DISPLAY & DELETE FILES (PER YEAR GROUP)
     st.sidebar.header(f"Manage Uploaded Images for {year_group}")
