@@ -11,7 +11,7 @@ import json
 import os
 
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
-st.session_state.setdefault("debug_mode", False)  # Keeps previous state
+st.session_state.setdefault("debug_mode", False)
 
 # ✅ Prevent duplicate Firebase initialization
 if not firebase_admin._apps:
@@ -52,15 +52,17 @@ SCHOOL_CREDENTIALS = {
 }
 
 # === SESSION STATE INITIALIZATION === #
-st.session_state.setdefault("logged_in", False)
-st.session_state.setdefault("school_name", "")
-st.session_state.setdefault("year_group", "")
-st.session_state.setdefault("image_urls", [])
-st.session_state.setdefault("pairings", [])
-st.session_state.setdefault("comparisons", [])
-st.session_state.setdefault("rankings", [])
-st.session_state.setdefault("image_comparison_counts", {})
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.school_name = ""
+    st.session_state.year_group = ""
+    st.session_state.image_urls = []
+    st.session_state.pairings = []
+    st.session_state.comparisons = []
+    st.session_state.rankings = []
+    st.session_state.image_comparison_counts = {}
 
+# ✅ Ensure login form only appears if not logged in
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
     school_name = st.sidebar.text_input("Enter School Name")
@@ -72,7 +74,6 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.school_name = school_name
             st.sidebar.success(f"Logged in as {school_name}")
-            st.rerun()
         else:
             st.sidebar.error("Invalid credentials. Please check your username and password.")
 
@@ -82,15 +83,14 @@ else:
         st.session_state.clear()
         st.rerun()
 
-
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
     st.sidebar.header("Select Year Group")
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
+    # ✅ Ensure year group selection does not reset login state
     if year_group != st.session_state.year_group:
-        st.session_state.clear()
         st.session_state.year_group = year_group
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
@@ -100,11 +100,11 @@ if st.session_state.logged_in:
                  .stream()
         st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
         st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
-        st.rerun()
-    
+
+    # ✅ Upload section
     st.sidebar.header("Upload Writing Samples")
     uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
-    
+
     if uploaded_files:
         for uploaded_file in uploaded_files:
             try:
@@ -121,6 +121,7 @@ if st.session_state.logged_in:
                 st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
 
 
     # ✅ DISPLAY & DELETE FILES (PER YEAR GROUP)
