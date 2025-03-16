@@ -10,6 +10,10 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
+# ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
+if "debug_mode" not in st.session_state:
+    st.session_state.debug_mode = False  # Change to True if you need debugging output
+
 # ✅ Prevent duplicate Firebase initialization
 if not firebase_admin._apps:
     firebase_config = {
@@ -90,28 +94,26 @@ if st.session_state.logged_in:
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
     if year_group != previous_year_group:
-        # ✅ Reset session state when switching year groups
-        st.session_state.year_group = year_group
-        st.session_state.image_urls = []
-        st.session_state.pairings = []
-        st.session_state.comparisons = []
-        st.session_state.rankings = []
-        st.session_state.uploaded_files = []  # ✅ Clear uploaded files
-        st.session_state.image_comparison_counts = {}  # ✅ Reset comparison tracking
+    st.session_state.clear()  # ✅ Clears everything safely
+    st.session_state.year_group = year_group
+    st.session_state.image_urls = []
+    st.session_state.image_comparison_counts = {}
 
-        # ✅ Fetch images for the selected year group (without triggering an immediate page rerun)
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
+    # ✅ Fetch images for the selected year group
+    docs = db.collection("writing_samples")\
+             .where("school", "==", school_name)\
+             .where("year_group", "==", year_group)\
+             .stream()
 
-        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
+    st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
 
-        # ✅ Refresh image comparison tracking
-        for img in st.session_state.image_urls:
-            st.session_state.image_comparison_counts[img] = 0
+    if not st.session_state.image_urls:
+        st.warning(f"⚠️ No images found for {year_group}. Upload images to start comparisons.")
 
-        st.rerun()  # ✅ Ensures full refresh after setting values
+    st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+
+    st.rerun()  # ✅ Ensures page refresh **only if needed**
+
 
 
     # ✅ UPLOAD WRITING SAMPLES
@@ -200,8 +202,10 @@ except Exception as e:
     st.error(f"❌ Firestore Query Failed: {str(e)}")
 
 # ✅ Ensure image_urls is in session state
-if "image_urls" not in st.session_state or not isinstance(st.session_state.image_urls, list):
-    st.session_state.image_urls = []
+if "image_urls" not in st.session_state:
+    st.session_state.image_urls = image_urls
+elif not st.session_state.image_urls:
+    st.session_state.image_urls = image_urls  # ✅ Assign only if empty
 
 # ✅ Prevent error if no images exist for the selected year group
 if not st.session_state.image_urls:
@@ -220,9 +224,10 @@ if len(st.session_state.image_urls) >= 2:
     for img in st.session_state.image_urls:
         st.session_state.image_comparison_counts.setdefault(img, 0)
 
-    # ✅ Debugging output to check values
-    st.write("DEBUG: Image URLs:", st.session_state.image_urls)
-    st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
+    # ✅ Debugging output (only when `debug_mode` is enabled)
+    if st.session_state.get("debug_mode", False):
+        st.write("DEBUG: Image URLs:", st.session_state.image_urls)
+        st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
 
     # ✅ Generate all possible pairs
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
@@ -232,6 +237,7 @@ if len(st.session_state.image_urls) >= 2:
         all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
                                     st.session_state.image_comparison_counts.get(pair[1], 0)
     )
+
 
     # ✅ Process each pair one by one
     if st.session_state.pairings:
