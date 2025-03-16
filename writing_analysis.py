@@ -59,11 +59,6 @@ if "logged_in" not in st.session_state:
     st.session_state.rankings = []
     st.session_state.image_comparison_counts = {}
 
-# === LOGIN / LOGOUT SYSTEM === #
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.school_name = ""
-
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
     school_name = st.sidebar.text_input("Enter School Name")
@@ -91,33 +86,32 @@ if st.session_state.logged_in:
     st.sidebar.header("Select Year Group")
 
     # ✅ Detect Year Group Change
-previous_year_group = st.session_state.get("year_group", None)
-year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
+    previous_year_group = st.session_state.get("year_group", None)
+    year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-if year_group != previous_year_group:
-    # ✅ Reset session state when switching year groups
-    st.session_state.year_group = year_group
-    st.session_state.image_urls = []
-    st.session_state.pairings = []
-    st.session_state.comparisons = []
-    st.session_state.rankings = []
-    st.session_state.uploaded_files = []  # ✅ Clear uploaded files
-    st.session_state.image_comparison_counts = {}  # ✅ Reset comparison tracking
+    if year_group != previous_year_group:
+        # ✅ Reset session state when switching year groups
+        st.session_state.year_group = year_group
+        st.session_state.image_urls = []
+        st.session_state.pairings = []
+        st.session_state.comparisons = []
+        st.session_state.rankings = []
+        st.session_state.uploaded_files = []  # ✅ Clear uploaded files
+        st.session_state.image_comparison_counts = {}  # ✅ Reset comparison tracking
 
-    # ✅ Fetch images for the selected year group (without triggering an immediate page rerun)
-    docs = db.collection("writing_samples")\
-             .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\
-             .stream()
+        # ✅ Fetch images for the selected year group (without triggering an immediate page rerun)
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
 
-    st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
+        st.session_state.image_urls = [doc.to_dict()["image_url"] for doc in docs]
 
-    # ✅ Refresh image comparison tracking
-    for img in st.session_state.image_urls:
-        st.session_state.image_comparison_counts[img] = 0
+        # ✅ Refresh image comparison tracking
+        for img in st.session_state.image_urls:
+            st.session_state.image_comparison_counts[img] = 0
 
-    st.experimental_rerun()  # ✅ Ensures full refresh after setting values
-
+        st.rerun()  # ✅ Ensures full refresh after setting values
 
 
     # ✅ UPLOAD WRITING SAMPLES
