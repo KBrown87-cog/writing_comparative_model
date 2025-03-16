@@ -67,19 +67,21 @@ if not st.session_state.logged_in:
     password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
 
     if st.sidebar.button("Login"):
+        school_name = school_name.strip()
         if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
             st.session_state.logged_in = True
             st.session_state.school_name = school_name
             st.sidebar.success(f"Logged in as {school_name}")
             st.rerun()
         else:
-            st.sidebar.error("Invalid credentials")
+            st.sidebar.error("Invalid credentials. Please check your username and password.")
 
 else:
     st.sidebar.header(f"Logged in as {st.session_state.school_name}")
     if st.sidebar.button("Logout"):
         st.session_state.clear()
         st.rerun()
+
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
