@@ -68,8 +68,13 @@ st.session_state.setdefault("rankings", [])
 st.session_state.setdefault("image_comparison_counts", {})
 
 # ✅ Ensure year_group formatting is consistent
-if "year_group" in st.session_state and not st.session_state.year_group.startswith("Year "):
-    st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+if "year_group" in st.session_state and st.session_state.year_group:
+    clean_year_group = st.session_state.year_group.replace("Year ", "").strip()
+    st.session_state.year_group = f"Year {clean_year_group}"
+
+
+year_group = st.session_state.get("year_group", "Year 1")  # ✅ Use default "Year 1" if missing
+
 
 # ✅ Ensure login form only appears if user is not logged in
 if not st.session_state.logged_in:
@@ -215,7 +220,8 @@ if st.session_state.logged_in:
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
     if year_group != st.session_state.year_group:
-        st.session_state.year_group = f"Year {year_group}".strip()
+        clean_year_group = year_group.replace("Year ", "").strip()
+        st.session_state.year_group = f"Year {clean_year_group}"
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
 
@@ -223,7 +229,7 @@ if st.session_state.logged_in:
 st.sidebar.header("Upload Writing Samples")
 
 # ✅ Ensure year_group is formatted correctly
-year_group = f"Year {st.session_state.year_group}".strip()  # ✅ Fixes "YearYear" duplication
+year_group = st.session_state.year_group  # ✅ Use correctly formatted year_group
 
 uploaded_files = st.sidebar.file_uploader(
     "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
@@ -232,7 +238,9 @@ uploaded_files = st.sidebar.file_uploader(
 # ✅ Ensure `year_group` is formatted correctly before using it in Firestore and Storage paths
 if "year_group" in st.session_state and st.session_state.year_group:
     if not st.session_state.year_group.startswith("Year "):
-        st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+        clean_year_group = st.session_state.year_group.replace("Year ", "").strip()
+        st.session_state.year_group = f"Year {clean_year_group}"
+
 
 year_group = st.session_state.get("year_group", "Year 1")  # ✅ Use default "Year 1" if missing
 
@@ -294,7 +302,9 @@ if uploaded_files:
 # ✅ Ensure year_group is formatted correctly before querying Firestore
 if "year_group" in st.session_state and st.session_state.year_group:
     if not st.session_state.year_group.startswith("Year "):  # ✅ Prevent multiple "Year" prefixes
-        st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+        clean_year_group = st.session_state.year_group.replace("Year ", "").strip()
+        st.session_state.year_group = f"Year {clean_year_group}"
+
 
     year_group = st.session_state.year_group  # ✅ Use correctly formatted year group
 
@@ -410,7 +420,9 @@ def fetch_all_comparisons(school_name, year_group):
     try:
         # ✅ Ensure year_group is formatted correctly before querying
         if not year_group.startswith("Year "):
-            year_group = f"Year {year_group}".strip()
+            clean_year_group = year_group.replace("Year ", "").strip()
+            year_group = f"Year {clean_year_group}"
+
 
         docs = (
             db.collection("comparisons")
@@ -544,7 +556,9 @@ def fetch_ranked_images(school_name, year_group):
     try:
         # ✅ Ensure year_group is formatted correctly before querying Firestore
         if not year_group.startswith("Year "):
-            year_group = f"Year {year_group}".strip()
+            clean_year_group = year_group.replace("Year ", "").strip()
+            year_group = f"Year {clean_year_group}"
+
 
         docs = (
             db.collection("rankings")
