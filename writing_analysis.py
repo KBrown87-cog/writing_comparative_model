@@ -229,11 +229,12 @@ uploaded_files = st.sidebar.file_uploader(
     "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
 )
 
-# ✅ Ensure year_group is formatted correctly before using it in storage paths
-if not st.session_state.year_group.startswith("Year "):
-    st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+# ✅ Ensure `year_group` is formatted correctly before using it in Firestore and Storage paths
+if "year_group" in st.session_state and st.session_state.year_group:
+    if not st.session_state.year_group.startswith("Year "):
+        st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
 
-year_group = st.session_state.year_group  # ✅ Use correctly formatted year_group
+year_group = st.session_state.get("year_group", "Year 1")  # ✅ Use default "Year 1" if missing
 
 if uploaded_files:
     with st.sidebar.form("upload_form"):
@@ -279,6 +280,7 @@ if uploaded_files:
 
         # ✅ Debugging: Ensure uploaded images are stored in session state
         st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
+
 
 # ✅ Ensure year_group is formatted correctly before querying Firestore
 if "year_group" in st.session_state and st.session_state.year_group:
