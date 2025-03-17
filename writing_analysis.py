@@ -212,7 +212,6 @@ def store_vote(selected_image, other_image, school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
 
-
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
@@ -319,21 +318,11 @@ st.write("DEBUG: Retrieved Images", st.session_state.image_urls)  # ✅ Debuggin
 sample_pool = {"GDS": [], "EXS": [], "WTS": []}
 
 for img_url in st.session_state.image_urls:
-    found = False
     for grade in image_pool.keys():
         if img_url in image_pool[grade]:
             sample_pool[grade].append(img_url)
-            found = True
-            break
-    if not found:
-        st.warning(f"⚠️ Image {img_url} is not categorized correctly and won't be paired.")
 
-st.write("DEBUG: Sample Pool", sample_pool)  # ✅ Debugging sample distribution
-
-# ✅ Ensure that `sample_pool` has enough images before generating pairs
-if not any(sample_pool.values()):
-    st.warning("⚠️ No valid images are categorized for pairing. Please upload images.")
-    st.stop()
+st.write("DEBUG: Sample Pool Before Pairing", sample_pool)  # ✅ Debugging
 
 # ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
@@ -348,27 +337,24 @@ while len(all_pairs) < 40:
     elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
         pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))
     else:
-        # ✅ Fallback: Select the next available category with images
-        available_grades = [g for g in sample_pool if len(sample_pool[g]) > 1]
-        if available_grades:
-            selected_grade = random.choice(available_grades)
-            images = sample_pool[selected_grade]
-            pair = random.sample(images, 2)
+        # ✅ Final Fallback: Select any available pair
+        all_images = [img for g in sample_pool.values() for img in g]
+        if len(all_images) > 1:
+            pair = random.sample(all_images, 2)
         else:
             continue  # Skip if no valid pairing is found
 
-    if pair not in all_pairs:  # ✅ Ensuring no duplicate pairs
+    st.write("DEBUG: Pairing Attempt", selected_grade, "Pair:", pair)
+
+    if pair not in all_pairs:
         all_pairs.append(pair)
         pairing_attempts[selected_grade] += 1
 
     if sum(pairing_attempts.values()) >= 40:
         break
 
-# ✅ Shuffle pairs after generating them
 random.shuffle(all_pairs)
-
-# ✅ Debugging: Ensure pairings are created after all pairs are generated
-st.write("DEBUG: Generated Pairs", all_pairs)
+st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
 
 # ✅ Prioritize images with fewer comparisons while balancing categories
 if "image_comparison_counts" not in st.session_state:
@@ -382,8 +368,10 @@ if all_pairs:
 
     # ✅ Store the selected pairs
     st.session_state.pairings = all_pairs
+    st.write("DEBUG: Final Pairings", st.session_state.pairings)
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+
 
 # ✅ Calculate Rankings Using Bradley-Terry Model
 def calculate_rankings(comparisons):
