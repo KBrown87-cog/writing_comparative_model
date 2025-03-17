@@ -125,45 +125,53 @@ if st.session_state.logged_in:
                 sample_pool[grade].append(img_url)
 
     # ✅ Generate pairs from mixed ability levels
-    all_pairs = []
-    for grade, images in sample_pool.items():
-        random.shuffle(images)
-        for pair in itertools.combinations(images, 2):
-            all_pairs.append((pair[0], pair[1], grade))
+all_pairs = []
+for grade, images in sample_pool.items():
+    random.shuffle(images)
+    for pair in itertools.combinations(images, 2):
+        all_pairs.append((pair[0], pair[1], grade))
 
-    random.shuffle(all_pairs)
+random.shuffle(all_pairs)
 
-    # ✅ Prioritize images with fewer comparisons
-    all_pairs.sort(key=lambda pair: (
-        st.session_state.image_comparison_counts.get(pair[0], 0) +
-        st.session_state.image_comparison_counts.get(pair[1], 0)
-    ))
+# ✅ Prioritize images with fewer comparisons
+all_pairs.sort(key=lambda pair: (
+    st.session_state.image_comparison_counts.get(pair[0], 0) +
+    st.session_state.image_comparison_counts.get(pair[1], 0)
+))
 
-    num_pairs = min(40, len(all_pairs))  # ✅ Increase fairness (adjust as needed)
-    st.session_state.pairings = random.sample(all_pairs, num_pairs)
+# ✅ Ensure `num_pairs` doesn't exceed available pairs
+num_pairs = min(40, len(all_pairs))  # ✅ Adjust number of pairs if needed
+st.session_state.pairings = all_pairs[:num_pairs]  # ✅ Prevents `random.sample()` errors
 
-    # ✅ Process one pair at a time using click-to-select
-    if st.session_state.pairings:
-        img1, img2, _ = st.session_state.pairings.pop(0)
+# ✅ Process one pair at a time using click-to-select
+if st.session_state.pairings:
+    img1, img2, _ = st.session_state.pairings.pop(0)
 
-        col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-        if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
-            store_vote(img1, img2, school_name, year_group)
-            st.rerun()
+    if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
+        store_comparison(img1, img2, school_name, year_group)
+        st.rerun()
 
-        if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
-            store_vote(img2, img1, school_name, year_group)
-            st.rerun()
+    if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
+        store_comparison(img2, img1, school_name, year_group)
+        st.rerun()
 
+
+# ✅ Define function to store user comparison
+def store_comparison(img1, img2, school_name, year_group):
+    """Stores the user's comparison selection in Firestore."""
     try:
         # ✅ Ensure last selected image exists before assigning winner
         if "last_selected" not in st.session_state:
             st.error("❌ No selection recorded. Please select an image first.")
-            return
+            return  # ✅ Now correctly inside a function
 
         # ✅ Determine winner based on user selection
         winner = img1 if st.session_state.last_selected == img1 else img2
+
+        # ✅ Log the winner selection
+        st.success(f"✅ User selected: {winner}")
 
         # ✅ Store comparison in Firestore
         db.collection("comparisons").add({
@@ -175,9 +183,9 @@ if st.session_state.logged_in:
             "timestamp": firestore.SERVER_TIMESTAMP,
             "comparison_count": firestore.Increment(1)  # ✅ Track number of comparisons
         }, merge=True)  # ✅ Prevents duplicate entries
+
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
-
 
 
       
