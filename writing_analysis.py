@@ -450,7 +450,6 @@ else:
     st.warning("⚠️ No valid comparisons found for ranking. Make more comparisons first.")
 
 
-
 # ✅ Define function to fetch ranked images before calling it
 def fetch_ranked_images(school_name, year_group):
     """Fetches all ranked images from Firestore and sorts them by score."""
