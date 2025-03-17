@@ -365,25 +365,17 @@ while len(all_pairs) < max_pairs:
 st.write("DEBUG: Generated Pairs Before Sorting", list(all_pairs))
 
 if all_pairs:
-    st.session_state.pairings = list(all_pairs)
-    st.write("DEBUG: Final Pairings", st.session_state.pairings)
-else:
-    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+    all_pairs = [tuple(pair) for pair in all_pairs]  # Convert to tuples
 
-
-# ✅ Prioritize images with fewer comparisons while balancing categories
-if "image_comparison_counts" not in st.session_state:
-    st.session_state.image_comparison_counts = {}
-
-if all_pairs:
+    # ✅ Sort pairs by the least compared images first
     all_pairs.sort(key=lambda pair: (
         st.session_state.image_comparison_counts.get(pair[0], 0) +
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
-    # ✅ Store the selected pairs
+    # ✅ Store the sorted pairs
     st.session_state.pairings = all_pairs
-    st.write("DEBUG: Final Pairings", st.session_state.pairings)
+    st.write("DEBUG: Final Sorted Pairings", st.session_state.pairings)
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
