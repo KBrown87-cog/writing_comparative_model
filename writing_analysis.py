@@ -252,10 +252,15 @@ if st.session_state.logged_in:
                 except Exception as e:
                     st.sidebar.error(f"❌ Upload Failed: {str(e)}")  # ✅ Correctly closed f-string
 
-docs = db.collection("writing_samples")\
-         .where("school", "==", school_name)\
-         .where("year_group", "==", year_group)\
-         .stream()
+if "year_group" in st.session_state and st.session_state.year_group:
+    docs = db.collection("writing_samples")\
+             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+             .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+             .stream()
+else:
+    docs = []  # Prevents errors if no year group is selected
+    st.warning("⚠️ Please select a year group first.")
+
 
 retrieved_images = []  # ✅ Ensure images are stored properly
 image_pool = {"GDS": [], "EXS": [], "WTS": []}
