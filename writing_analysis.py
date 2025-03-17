@@ -236,6 +236,8 @@ if "year_group" in st.session_state and st.session_state.year_group:
 
 year_group = st.session_state.get("year_group", "Year 1")  # ✅ Use default "Year 1" if missing
 
+grade_labels = {}  # ✅ Ensure grade_labels dictionary exists
+
 if uploaded_files:
     with st.sidebar.form("upload_form"):
         for uploaded_file in uploaded_files:
@@ -249,7 +251,7 @@ if uploaded_files:
         uploaded_image_urls = []  # ✅ Collect image URLs before updating session state
 
         for uploaded_file in uploaded_files:
-            grade_label = grade_labels[uploaded_file.name]
+            grade_label = grade_labels.get(uploaded_file.name, "EXS")  # ✅ Default to EXS if missing
 
             try:
                 filename = f"{school_name}_{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
@@ -273,6 +275,13 @@ if uploaded_files:
 
             except Exception as e:
                 st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+        # ✅ Update session state after all images are processed
+        if uploaded_image_urls:
+            st.session_state.image_urls.extend(uploaded_image_urls)
+
+        # ✅ Debugging: Ensure uploaded images are stored in session state
+        st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
         # ✅ Update session state after all images are processed
         if uploaded_image_urls:
