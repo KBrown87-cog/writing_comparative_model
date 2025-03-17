@@ -250,7 +250,8 @@ if st.session_state.logged_in:
                     st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
 
                 except Exception as e:
-                    st.sidebar.error(f"❌ Upload Failed: {str(e# ✅ Fetch images after upload to ensure availability
+                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")  # ✅ Correctly closed f-string
+
 docs = db.collection("writing_samples")\
          .where("school", "==", school_name)\
          .where("year_group", "==", year_group)\
