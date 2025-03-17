@@ -425,8 +425,13 @@ def bradley_terry_log_likelihood(scores, comparisons):
 
 
 # ✅ Fetch Rankings from Firestore and Apply Bradley-Terry Model
-stored_comparisons = fetch_all_comparisons(school_name, year_group)
+if "year_group" in st.session_state and st.session_state.year_group:
+    stored_comparisons = fetch_all_comparisons(st.session_state.school_name, st.session_state.year_group)
+else:
+    stored_comparisons = []
+    st.warning("⚠️ Please select a year group first.")
 
+# ✅ Ensure rankings are only calculated if there are comparisons
 if stored_comparisons:
     rankings = calculate_rankings(stored_comparisons)
 
@@ -435,12 +440,15 @@ if stored_comparisons:
         doc_id = hashlib.sha256(image.encode()).hexdigest()[:20]  # Create a short, unique ID
 
         db.collection("rankings").document(doc_id).set({
-            "school": school_name,
-            "year_group": year_group,
+            "school": st.session_state.school_name,  # ✅ Ensure session state is used
+            "year_group": st.session_state.year_group,  # ✅ Ensure session state is used
             "image_url": image,
             "score": float(score),  # ✅ Store as float for consistency
-            "comparison_count": stored_comparisons.count(image)  # ✅ Store number of times this image was compared
+            "comparison_count": sum(1 for comp in stored_comparisons if image in comp)  # ✅ Correct count logic
         }, merge=True)
+else:
+    st.warning("⚠️ No valid comparisons found for ranking. Make more comparisons first.")
+
 
 
 # ✅ Define function to fetch ranked images before calling it
