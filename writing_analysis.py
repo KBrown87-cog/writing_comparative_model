@@ -377,7 +377,6 @@ else:
 
 
 
-
 # ✅ Prioritize images with fewer comparisons while balancing categories
 if "image_comparison_counts" not in st.session_state:
     st.session_state.image_comparison_counts = {}
