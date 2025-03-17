@@ -304,6 +304,8 @@ for doc in docs:
             st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
         st.session_state.image_comparison_counts[data["image_url"]] = 0
 
+st.write("DEBUG: Image Pool", image_pool)  # ✅ Debugging image categorization
+
 # ✅ Ensure images are retrieved successfully
 if retrieved_images:
     st.session_state.image_urls = retrieved_images
@@ -311,8 +313,7 @@ else:
     st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
     st.stop()
 
-# ✅ Debugging: Ensure images are retrieved correctly
-st.write("DEBUG: Retrieved Images", st.session_state.image_urls)
+st.write("DEBUG: Retrieved Images", st.session_state.image_urls)  # ✅ Debugging retrieval
 
 # ✅ Ensure fair sample distribution across GDS, EXS, and WTS
 sample_pool = {"GDS": [], "EXS": [], "WTS": []}
@@ -326,6 +327,13 @@ for img_url in st.session_state.image_urls:
             break
     if not found:
         st.warning(f"⚠️ Image {img_url} is not categorized correctly and won't be paired.")
+
+st.write("DEBUG: Sample Pool", sample_pool)  # ✅ Debugging sample distribution
+
+# ✅ Ensure that `sample_pool` has enough images before generating pairs
+if not any(sample_pool.values()):
+    st.warning("⚠️ No valid images are categorized for pairing. Please upload images.")
+    st.stop()
 
 # ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
@@ -349,16 +357,17 @@ while len(all_pairs) < 40:
         else:
             continue  # Skip if no valid pairing is found
 
-    if pair not in all_pairs:
+    if pair not in all_pairs:  # ✅ Ensuring no duplicate pairs
         all_pairs.append(pair)
         pairing_attempts[selected_grade] += 1
 
     if sum(pairing_attempts.values()) >= 40:
         break
 
+# ✅ Shuffle pairs after generating them
 random.shuffle(all_pairs)
 
-# ✅ Debugging: Ensure pairings are created
+# ✅ Debugging: Ensure pairings are created after all pairs are generated
 st.write("DEBUG: Generated Pairs", all_pairs)
 
 # ✅ Prioritize images with fewer comparisons while balancing categories
