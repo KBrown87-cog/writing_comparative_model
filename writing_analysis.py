@@ -11,10 +11,12 @@ import json
 import os
 
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
-st.session_state.setdefault("debug_mode", False)
+if "debug_mode" not in st.session_state:
+    st.session_state.debug_mode = False
 
 # ✅ Prevent duplicate Firebase initialization
-if not firebase_admin._apps:
+if "firebase_initialized" not in st.session_state:
+    st.session_state.firebase_initialized = True
     firebase_config = {
         "type": st.secrets["FIREBASE"]["TYPE"],
         "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
@@ -79,7 +81,9 @@ if not st.session_state.logged_in:
 else:
     st.sidebar.header(f"Logged in as {st.session_state.school_name}")
     if st.sidebar.button("Logout"):
-        st.session_state.clear()
+        keys_to_clear = ["logged_in", "school_name", "year_group"]
+        for key in keys_to_clear:
+            st.session_state.pop(key, None)
         st.rerun()
 
 # === AFTER LOGIN === #
@@ -93,110 +97,81 @@ if st.session_state.logged_in:
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
         docs = db.collection("writing_samples")\
-                 .where(filter=firestore.FieldFilter("school", "==", school_name))\
-                 .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
                  .stream()
+
+        image_pool = {"GDS": [], "EXS": [], "WTS": []}
+        st.session_state.image_urls = []
+
         for doc in docs:
             data = doc.to_dict()
             if "image_url" in data and "grade_label" in data:
-                st.session_state.image_urls.append((data["image_url"], data["grade_label"]))
+                image_pool[data["grade_label"]].append(data["image_url"])
+                st.session_state.image_urls.append(data["image_url"])
                 st.session_state.image_comparison_counts[data["image_url"]] = 0
 
-    # ✅ Upload section
-    st.sidebar.header("Upload Writing Samples")
-    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
+    # ✅ Prevent errors if no images found
+    if not any(image_pool.values()):
+        st.warning("⚠️ No images available for comparison. Upload images first.")
+        st.stop()
 
-    grade_labels = {}
-    # ✅ AFTER Uploading and Storing Images
-if uploaded_files:
-    for uploaded_file in uploaded_files:
-        grade_labels[uploaded_file.name] = st.sidebar.selectbox(
-            f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
-        )
+    # ✅ Ensure fair sample distribution across GDS, EXS, WTS
+    sample_pool = {"GDS": [], "EXS": [], "WTS": []}
 
-    if st.sidebar.button("Confirm Upload"):
-        for uploaded_file in uploaded_files:
-            grade_label = grade_labels[uploaded_file.name]
+    for img_url in st.session_state.image_urls:
+        for grade, images in image_pool.items():
+            if img_url in images:
+                sample_pool[grade].append(img_url)
 
-            try:
-                filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
-                firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
+    # ✅ Generate pairs from mixed ability levels
+    all_pairs = []
+    for grade, images in sample_pool.items():
+        random.shuffle(images)
+        for pair in itertools.combinations(images, 2):
+            all_pairs.append((pair[0], pair[1], grade))
 
-                blob = bucket.blob(firebase_path)
-                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+    random.shuffle(all_pairs)
 
-                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
-                db.collection("writing_samples").add({
-                    "school": school_name,
-                    "year_group": year_group,
-                    "image_url": image_url,
-                    "filename": filename,
-                    "grade_label": grade_label
-                })
+    # ✅ Prioritize images with fewer comparisons
+    all_pairs.sort(key=lambda pair: (
+        st.session_state.image_comparison_counts.get(pair[0], 0) +
+        st.session_state.image_comparison_counts.get(pair[1], 0)
+    ))
 
-                st.session_state.image_urls.append((image_url, grade_label))
-                st.session_state.image_comparison_counts[image_url] = 0
-                st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+    num_pairs = min(40, len(all_pairs))  # ✅ Increase fairness (adjust as needed)
+    st.session_state.pairings = random.sample(all_pairs, num_pairs)
 
-            except Exception as e:
-                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+    # ✅ Process one pair at a time using click-to-select
+    if st.session_state.pairings:
+        img1, img2, _ = st.session_state.pairings.pop(0)
 
-# ✅ FETCH & PROCESS IMAGES FOR FAIR PAIRING (Add Here)
-docs = db.collection("writing_samples")\
-         .where("school", "==", school_name)\
-         .where("year_group", "==", year_group)\
-         .stream()
+        col1, col2 = st.columns(2)
 
-image_pool = {"GDS": [], "EXS": [], "WTS": []}
+        if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
+            store_vote(img1, img2, school_name, year_group)
+            st.rerun()
 
-for doc in docs:
-    data = doc.to_dict()
-    if "image_url" in data and "grade_label" in data:
-        image_pool[data["grade_label"]].append(data["image_url"])
-
-# ✅ Ensure fair sample distribution across GDS, EXS, WTS
-sample_pool = {"GDS": [], "EXS": [], "WTS": []}
-
-for img_url, grade in zip(st.session_state.image_urls, st.session_state.image_comparison_counts.keys()):
-    sample_pool[grade].append(img_url)
-
-# ✅ Generate pairs from mixed ability levels
-all_pairs = []
-for grade, images in sample_pool.items():
-    random.shuffle(images)
-    for pair in itertools.combinations(images, 2):
-        all_pairs.append((pair[0], pair[1], grade))
-
-random.shuffle(all_pairs)
-
-# ✅ Store the generated pairs for fair comparison
-st.session_state.pairings = all_pairs[:20]  # Assign only a fair subset per user session
-
-# ✅ Process one pair at a time using click-to-select
-if st.session_state.pairings:
-    img1, img2, _ = st.session_state.pairings.pop(0)
-
-    col1, col2 = st.columns(2)
-
-    if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
-        store_vote(img1, img2, school_name, year_group)
-        st.rerun()
-
-    if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
-        store_vote(img2, img1, school_name, year_group)
-        st.rerun()
-
+        if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
+            store_vote(img2, img1, school_name, year_group)
+            st.rerun()
 
     try:
-        db.collection("comparisons").add({
-            "school": school_name,
-            "year_group": year_group,
-            "image_1": img1,
-            "image_2": img2,
-            "timestamp": firestore.SERVER_TIMESTAMP
-        })
-    except Exception as e:
-        st.error(f"❌ Failed to store comparison: {str(e)}")
+    # ✅ Determine winner based on user selection
+    winner = img1 if st.session_state.last_selected == img1 else img2
+
+    db.collection("comparisons").add({
+        "school": school_name,
+        "year_group": year_group,
+        "image_1": img1,
+        "image_2": img2,
+        "winner": winner,  # ✅ Track which image was selected
+        "timestamp": firestore.SERVER_TIMESTAMP,
+        "comparison_count": firestore.Increment(1)  # ✅ Track number of comparisons
+    }, merge=True)  # ✅ Prevents duplicate entries
+except Exception as e:
+    st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
 
       
