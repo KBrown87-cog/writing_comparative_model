@@ -172,11 +172,14 @@ if st.session_state.logged_in:
 except Exception as e:
     st.error(f"❌ Failed to store comparison: {str(e)}")
 
-
-
       
 def store_vote(selected_image, other_image, school_name, year_group):
-    """Stores votes and updates ranking scores in Firestore."""
+    """Stores votes and updates ranking scores in Firestore using Firestore Transactions."""
+
+    # ✅ Prevent self-comparison issues
+    if selected_image == other_image:
+        st.error("❌ Invalid comparison: Both images are the same.")
+        return
 
     try:
         # ✅ Generate Firestore document IDs
@@ -186,49 +189,60 @@ def store_vote(selected_image, other_image, school_name, year_group):
         selected_ref = db.collection("rankings").document(selected_doc_id)
         other_ref = db.collection("rankings").document(other_doc_id)
 
-        selected_doc = selected_ref.get()
-        other_doc = other_ref.get()
+        def transaction_update(transaction):
+            # ✅ Get current data in one transaction (avoiding multiple `.get()` calls)
+            selected_doc = selected_ref.get(transaction=transaction)
+            other_doc = other_ref.get(transaction=transaction)
 
-        # ✅ Get existing scores or initialize if not found
-        selected_data = selected_doc.to_dict() if selected_doc.exists else {"score": 0, "votes": 0}
-        other_data = other_doc.to_dict() if other_doc.exists else {"score": 0, "votes": 0}
+            # ✅ Get existing scores or initialize if not found
+            selected_data = selected_doc.to_dict() if selected_doc.exists else {"score": 0, "votes": 0, "comparison_count": 0}
+            other_data = other_doc.to_dict() if other_doc.exists else {"score": 0, "votes": 0, "comparison_count": 0}
 
-        # ✅ Extract previous values
-        selected_score = selected_data.get("score", 0)
-        other_score = other_data.get("score", 0)
-        selected_votes = selected_data.get("votes", 0)
-        other_votes = other_data.get("votes", 0)  
+            # ✅ Extract previous values
+            selected_score = selected_data.get("score", 0)
+            other_score = other_data.get("score", 0)
+            selected_votes = selected_data.get("votes", 0)
+            other_votes = other_data.get("votes", 0)
+            selected_comparisons = selected_data.get("comparison_count", 0)
+            other_comparisons = other_data.get("comparison_count", 0)
 
-        # ✅ Apply Normalization to Adjust Scores
-        K = 1.0  # ✅ Scaling Factor
-        expected_score = 1 / (1 + np.exp(other_score - selected_score))  # Expected probability
+            # ✅ Apply Bradley-Terry Model Update
+            K = 1.0  # ✅ Scaling Factor
+            expected_score = 1 / (1 + np.exp(other_score - selected_score))  # Expected probability
 
-        selected_score += K * (1 - expected_score)  # ✅ Adjust for winner
-        other_score -= K * expected_score  # ✅ Adjust for loser
+            selected_score += K * (1 - expected_score)  # ✅ Adjust for winner
+            other_score -= K * expected_score  # ✅ Adjust for loser
 
-        # ✅ Track the number of times each image has been compared
-        selected_votes += 1  
-        other_votes += 1  
+            # ✅ Track number of times each image has been compared
+            selected_votes += 1
+            other_votes += 1
+            selected_comparisons += 1
+            other_comparisons += 1
 
-        # ✅ Update Firestore with new values
-        selected_ref.set({
-            "school": school_name,
-            "year_group": year_group,
-            "image_url": selected_image,
-            "score": selected_score,
-            "votes": selected_votes
-        }, merge=True)
+            # ✅ Update Firestore in one transaction
+            transaction.set(selected_ref, {
+                "school": school_name,
+                "year_group": year_group,
+                "image_url": selected_image,
+                "score": selected_score,
+                "votes": selected_votes,
+                "comparison_count": selected_comparisons
+            }, merge=True)
 
-        other_ref.set({
-            "school": school_name,
-            "year_group": year_group,
-            "image_url": other_image,
-            "score": other_score,
-            "votes": other_votes
-        }, merge=True)
+            transaction.set(other_ref, {
+                "school": school_name,
+                "year_group": year_group,
+                "image_url": other_image,
+                "score": other_score,
+                "votes": other_votes,
+                "comparison_count": other_comparisons
+            }, merge=True)
+
+        db.run_transaction(transaction_update)
 
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
+
 
 
 # ✅ Fetch all stored comparisons from Firestore
