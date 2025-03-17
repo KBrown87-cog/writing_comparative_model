@@ -235,15 +235,17 @@ if st.session_state.pairings:
                 store_vote(img2, img1, school_name, year_group)
                 st.rerun()
 
-    # ✅ Automatically store the comparison in Firestore
     try:
-        db.collection("comparisons").add({
-    "school": school_name,
-    "year_group": year_group,
-    "image_1": img1,
-    "image_2": img2,
-    "timestamp": firestore.SERVER_TIMESTAMP  # ✅ Add missing entry or close properly
-})
+    db.collection("comparisons").add({
+        "school": school_name,
+        "year_group": year_group,
+        "image_1": img1,
+        "image_2": img2,
+        "timestamp": firestore.SERVER_TIMESTAMP
+    })
+except Exception as e:
+    st.error(f"❌ Failed to store comparison: {str(e)}")  # ✅ Added exception handling
+
 
       
 def store_vote(selected_image, other_image, school_name, year_group):
