@@ -157,26 +157,27 @@ if st.session_state.logged_in:
             st.rerun()
 
     try:
-    # ✅ Ensure last selected image exists before assigning winner
-    if "last_selected" not in st.session_state:
-        st.error("❌ No selection recorded. Please select an image first.")
-        return
+        # ✅ Ensure last selected image exists before assigning winner
+        if "last_selected" not in st.session_state:
+            st.error("❌ No selection recorded. Please select an image first.")
+            return
 
-    # ✅ Determine winner based on user selection
-    winner = img1 if st.session_state.last_selected == img1 else img2
+        # ✅ Determine winner based on user selection
+        winner = img1 if st.session_state.last_selected == img1 else img2
 
-    # ✅ Store comparison in Firestore
-    db.collection("comparisons").add({
-        "school": school_name,
-        "year_group": year_group,
-        "image_1": img1,
-        "image_2": img2,
-        "winner": winner,  # ✅ Track which image was selected
-        "timestamp": firestore.SERVER_TIMESTAMP,
-        "comparison_count": firestore.Increment(1)  # ✅ Track number of comparisons
-    }, merge=True)  # ✅ Prevents duplicate entries
-except Exception as e:
-    st.error(f"❌ Failed to store comparison: {str(e)}")
+        # ✅ Store comparison in Firestore
+        db.collection("comparisons").add({
+            "school": school_name,
+            "year_group": year_group,
+            "image_1": img1,
+            "image_2": img2,
+            "winner": winner,  # ✅ Track which image was selected
+            "timestamp": firestore.SERVER_TIMESTAMP,
+            "comparison_count": firestore.Increment(1)  # ✅ Track number of comparisons
+        }, merge=True)  # ✅ Prevents duplicate entries
+    except Exception as e:
+        st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
 
       
