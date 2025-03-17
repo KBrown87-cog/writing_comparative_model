@@ -10,6 +10,17 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
+# ✅ Fetch All Comparisons Function (Place this before Firebase initialization)
+def fetch_all_comparisons(school_name, year_group):
+    """Fetches all writing comparisons for a given school and year group from Firestore."""
+    db = firestore.client()
+    comparisons_ref = db.collection("comparisons")\
+                        .where("school", "==", school_name)\
+                        .where("year_group", "==", year_group)\
+                        .stream()
+    
+    return [doc.to_dict() for doc in comparisons_ref]
+
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
@@ -39,9 +50,10 @@ if not firebase_admin._apps:
         'storageBucket': 'writing-comparison.firebasestorage.app'
     })
 
-# ✅ Initialize Firestore and Storage Client (ensuring no indentation errors)
+# ✅ Initialize Firestore and Storage Client
 db = firestore.client()
 bucket = storage.bucket()
+
 
 
 # === STREAMLIT PAGE SETUP === #
@@ -280,10 +292,6 @@ if st.session_state.logged_in:
             # ✅ Debugging: Ensure uploaded images are stored
             st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
-import random
-import streamlit as st
-from google.cloud import firestore
-
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
     docs = db.collection("writing_samples")\
@@ -305,17 +313,17 @@ for doc in docs:
             image_pool[data["grade_label"]].append(data["image_url"])
         else:
             st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
-
         st.session_state.image_comparison_counts[data["image_url"]] = 0
 
 st.write("DEBUG: Image Pool", image_pool)  # ✅ Debugging image categorization
 
 # ✅ Ensure images are retrieved successfully
-if not retrieved_images:
+if retrieved_images:
+    st.session_state.image_urls = retrieved_images
+else:
     st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
     st.stop()
 
-st.session_state.image_urls = retrieved_images
 st.write("DEBUG: Retrieved Images", st.session_state.image_urls)  # ✅ Debugging retrieval
 
 # ✅ Ensure fair sample distribution across GDS, EXS, and WTS
@@ -328,54 +336,72 @@ for img_url in st.session_state.image_urls:
 
 st.write("DEBUG: Sample Pool Before Pairing", sample_pool)  # ✅ Debugging
 
-# ✅ Generate balanced pairs with no duplicates
-all_pairs = set()  # 🔥 Use a set to avoid duplicates (A, B) vs (B, A)
+# ✅ Generate balanced pairs using adaptive distribution
+all_pairs = []
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
-max_pairs = min(40, sum(len(sample_pool[k]) for k in sample_pool) // 2)  # 🔄 Adjust max pairs based on images available
 
-while len(all_pairs) < max_pairs:
-    selected_grade = random.choices(
-        list(sample_pool.keys()), 
-        weights=[len(sample_pool[g]) for g in sample_pool if sample_pool[g]]
-    )[0]
+st.write("DEBUG: Sample Pool Before Pairing", sample_pool)
 
+while len(all_pairs) < 40:
+    selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
     images = sample_pool[selected_grade]
-    pair = None
 
     # ✅ Ensure diverse pairings
-    if selected_grade == "GDS" and sample_pool["EXS"]:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
-    elif selected_grade == "GDS" and sample_pool["WTS"]:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # GDS vs WTS
-    elif selected_grade == "EXS" and sample_pool["WTS"]:
-        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # EXS vs WTS
-    elif selected_grade == "EXS" and sample_pool["GDS"]:
-        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["GDS"]))  # EXS vs GDS
-    elif selected_grade == "WTS" and sample_pool["EXS"]:
-        pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["EXS"]))  # WTS vs EXS
-    elif selected_grade == "WTS" and sample_pool["GDS"]:
-        pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["GDS"]))  # WTS vs GDS
-    elif len(images) > 1:
-        pair = tuple(random.sample(images, 2))  # Fallback: Same grade pairing
+    if selected_grade == "GDS":
+        if len(sample_pool["EXS"]) > 0:
+            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
+        elif len(sample_pool["WTS"]) > 0:
+            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # GDS vs WTS
+        else:
+            pair = random.sample(sample_pool["GDS"], 2)  # Fallback: GDS vs GDS
+    elif selected_grade == "EXS":
+        if len(sample_pool["GDS"]) > 0:
+            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["GDS"]))  # EXS vs GDS
+        elif len(sample_pool["WTS"]) > 0:
+            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # EXS vs WTS
+        else:
+            pair = random.sample(sample_pool["EXS"], 2)  # Fallback: EXS vs EXS
+    elif selected_grade == "WTS":
+        if len(sample_pool["EXS"]) > 0:
+            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["EXS"]))  # WTS vs EXS
+        elif len(sample_pool["GDS"]) > 0:
+            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["GDS"]))  # WTS vs GDS
+        else:
+            pair = random.sample(sample_pool["WTS"], 2)  # Fallback: WTS vs WTS
 
-    if pair and pair not in all_pairs and (pair[1], pair[0]) not in all_pairs:
-        all_pairs.add(pair)
+    st.write("DEBUG: Pairing Attempt", selected_grade, "Pair:", pair)
+
+    if pair not in all_pairs:
+        all_pairs.append(pair)
         pairing_attempts[selected_grade] += 1
 
-st.write("DEBUG: Generated Pairs Before Sorting", list(all_pairs))
+    if sum(pairing_attempts.values()) >= 40:
+        break
+
+random.shuffle(all_pairs)
+st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
 
 if all_pairs:
-    all_pairs = [tuple(pair) for pair in all_pairs]  # Convert to tuples
+    st.session_state.pairings = all_pairs
+    st.write("DEBUG: Final Pairings", st.session_state.pairings)
+else:
+    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
-    # ✅ Sort pairs by the least compared images first
+
+
+# ✅ Prioritize images with fewer comparisons while balancing categories
+if "image_comparison_counts" not in st.session_state:
+    st.session_state.image_comparison_counts = {}
+
+if all_pairs:
     all_pairs.sort(key=lambda pair: (
         st.session_state.image_comparison_counts.get(pair[0], 0) +
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
-    # ✅ Store the sorted pairs
+    # ✅ Store the selected pairs
     st.session_state.pairings = all_pairs
-    st.write("DEBUG: Final Sorted Pairings", st.session_state.pairings)
+    st.write("DEBUG: Final Pairings", st.session_state.pairings)
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
