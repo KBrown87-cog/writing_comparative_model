@@ -33,14 +33,16 @@ if not firebase_admin._apps:
     with open(firebase_credentials_path, "w") as json_file:
         json.dump(firebase_config, json_file)
 
+    # ✅ Initialize Firebase
     cred = credentials.Certificate(firebase_credentials_path)
     firebase_admin.initialize_app(cred, {
         'storageBucket': 'writing-comparison.firebasestorage.app'
     })
 
-
+# ✅ Initialize Firestore and Storage Client (ensuring no indentation errors)
 db = firestore.client()
 bucket = storage.bucket()
+
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
