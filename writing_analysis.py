@@ -236,7 +236,7 @@ if st.session_state.pairings:
                 st.rerun()
 
     try:
-    db.collection("comparisons").add({
+    db.collection("comparisons").add({  # ✅ Indented correctly!
         "school": school_name,
         "year_group": year_group,
         "image_1": img1,
@@ -244,7 +244,7 @@ if st.session_state.pairings:
         "timestamp": firestore.SERVER_TIMESTAMP
     })
 except Exception as e:
-    st.error(f"❌ Failed to store comparison: {str(e)}")  # ✅ Added exception handling
+    st.error(f"❌ Failed to store comparison: {str(e)}")
 
 
       
