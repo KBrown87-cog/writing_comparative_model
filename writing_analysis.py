@@ -15,8 +15,7 @@ if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 
 # ✅ Prevent duplicate Firebase initialization
-if "firebase_initialized" not in st.session_state:
-    st.session_state.firebase_initialized = True
+if not firebase_admin._apps:
     firebase_config = {
         "type": st.secrets["FIREBASE"]["TYPE"],
         "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
@@ -39,6 +38,7 @@ if "firebase_initialized" not in st.session_state:
         'storageBucket': 'writing-comparison.firebasestorage.app'
     })
 
+
 db = firestore.client()
 bucket = storage.bucket()
 
@@ -54,6 +54,9 @@ SCHOOL_CREDENTIALS = {
 }
 
 # === SESSION STATE INITIALIZATION === #
+st.session_state.setdefault("debug_mode", False)  # ✅ Ensure debug mode is set
+st.session_state.setdefault("firebase_initialized", False)  # ✅ Prevent duplicate Firebase initialization
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.school_name = ""
@@ -64,6 +67,7 @@ if "logged_in" not in st.session_state:
     st.session_state.rankings = []
     st.session_state.image_comparison_counts = {}
 
+# ✅ Ensure login form only appears if user is not logged in
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
     school_name = st.sidebar.text_input("Enter School Name")
@@ -75,6 +79,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.school_name = school_name
             st.sidebar.success(f"Logged in as {school_name}")
+            st.rerun()  # ✅ Ensure UI updates immediately
         else:
             st.sidebar.error("Invalid credentials. Please check your username and password.")
 
@@ -84,7 +89,9 @@ else:
         keys_to_clear = ["logged_in", "school_name", "year_group"]
         for key in keys_to_clear:
             st.session_state.pop(key, None)
+        st.sidebar.info("You have been logged out.")  # ✅ Provide UI feedback
         st.rerun()
+
 
 # ✅ Define function to store user comparison (Moved to Global Scope)
 def store_comparison(img1, img2, school_name, year_group):
