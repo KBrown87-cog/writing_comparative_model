@@ -328,11 +328,13 @@ st.write("DEBUG: Sample Pool Before Pairing", sample_pool)  # ✅ Debugging
 all_pairs = []
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
 
+st.write("DEBUG: Sample Pool Before Pairing", sample_pool)
+
 while len(all_pairs) < 40:
     selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
     images = sample_pool[selected_grade]
 
-    # ✅ Ensure cross-category pairings
+    # ✅ Ensure diverse pairings
     if selected_grade == "GDS":
         if len(sample_pool["EXS"]) > 0:
             pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
@@ -366,6 +368,13 @@ while len(all_pairs) < 40:
 
 random.shuffle(all_pairs)
 st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
+
+if all_pairs:
+    st.session_state.pairings = all_pairs
+    st.write("DEBUG: Final Pairings", st.session_state.pairings)
+else:
+    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+
 
 
 
