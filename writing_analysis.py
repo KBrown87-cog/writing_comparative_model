@@ -336,72 +336,66 @@ for img_url in st.session_state.image_urls:
 
 st.write("DEBUG: Sample Pool Before Pairing", sample_pool)  # ✅ Debugging
 
-# ✅ Generate balanced pairs using adaptive distribution
-all_pairs = []
+# ✅ Define a maximum number of pairs based on available images
+max_pairs = min(40, sum(len(sample_pool[k]) for k in sample_pool) // 2)
+
+all_pairs = set()
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
 
-st.write("DEBUG: Sample Pool Before Pairing", sample_pool)
+# ✅ Ensure there are enough images before entering the loop
+if sum(len(sample_pool[k]) for k in sample_pool) < 2:
+    st.warning("⚠️ Not enough images available to generate pairs.")
+    st.stop()
 
-while len(all_pairs) < 40:
-    selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
+while len(all_pairs) < max_pairs:
+    selected_grade = random.choices(
+        list(sample_pool.keys()), 
+        weights=[len(sample_pool[g]) for g in sample_pool if sample_pool[g]]
+    )[0]
+
     images = sample_pool[selected_grade]
+    pair = None
 
     # ✅ Ensure diverse pairings
-    if selected_grade == "GDS":
-        if len(sample_pool["EXS"]) > 0:
-            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
-        elif len(sample_pool["WTS"]) > 0:
-            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # GDS vs WTS
-        else:
-            pair = random.sample(sample_pool["GDS"], 2)  # Fallback: GDS vs GDS
-    elif selected_grade == "EXS":
-        if len(sample_pool["GDS"]) > 0:
-            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["GDS"]))  # EXS vs GDS
-        elif len(sample_pool["WTS"]) > 0:
-            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # EXS vs WTS
-        else:
-            pair = random.sample(sample_pool["EXS"], 2)  # Fallback: EXS vs EXS
-    elif selected_grade == "WTS":
-        if len(sample_pool["EXS"]) > 0:
-            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["EXS"]))  # WTS vs EXS
-        elif len(sample_pool["GDS"]) > 0:
-            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["GDS"]))  # WTS vs GDS
-        else:
-            pair = random.sample(sample_pool["WTS"], 2)  # Fallback: WTS vs WTS
+    if selected_grade == "GDS" and sample_pool["EXS"]:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
+    elif selected_grade == "GDS" and sample_pool["WTS"]:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # GDS vs WTS
+    elif selected_grade == "EXS" and sample_pool["WTS"]:
+        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # EXS vs WTS
+    elif selected_grade == "EXS" and sample_pool["GDS"]:
+        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["GDS"]))  # EXS vs GDS
+    elif selected_grade == "WTS" and sample_pool["EXS"]:
+        pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["EXS"]))  # WTS vs EXS
+    elif selected_grade == "WTS" and sample_pool["GDS"]:
+        pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["GDS"]))  # WTS vs GDS
+    elif len(images) > 1:
+        pair = tuple(random.sample(images, 2))  # Fallback: Same grade pairing
 
-    st.write("DEBUG: Pairing Attempt", selected_grade, "Pair:", pair)
-
-    if pair not in all_pairs:
-        all_pairs.append(pair)
+    if pair and pair not in all_pairs and (pair[1], pair[0]) not in all_pairs:
+        all_pairs.add(pair)
         pairing_attempts[selected_grade] += 1
 
-    if sum(pairing_attempts.values()) >= 40:
+    # ✅ Break if no more valid pairs can be formed
+    if sum(len(sample_pool[k]) for k in sample_pool) < 2:
         break
 
-random.shuffle(all_pairs)
-st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
+st.write("DEBUG: Generated Pairs Before Sorting", list(all_pairs))
 
-if all_pairs:
-    st.session_state.pairings = all_pairs
-    st.write("DEBUG: Final Pairings", st.session_state.pairings)
-else:
-    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
-
-
-
-# ✅ Prioritize images with fewer comparisons while balancing categories
+# ✅ Initialize comparison counts before sorting
 if "image_comparison_counts" not in st.session_state:
     st.session_state.image_comparison_counts = {}
 
 if all_pairs:
-    all_pairs.sort(key=lambda pair: (
+    # ✅ Sort pairs by the number of times they have been compared
+    all_pairs = sorted(all_pairs, key=lambda pair: (
         st.session_state.image_comparison_counts.get(pair[0], 0) +
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
     # ✅ Store the selected pairs
     st.session_state.pairings = all_pairs
-    st.write("DEBUG: Final Pairings", st.session_state.pairings)
+    st.write("DEBUG: Final Sorted Pairings", st.session_state.pairings)
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
