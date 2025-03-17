@@ -250,46 +250,75 @@ if st.session_state.logged_in:
                     st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
 
                 except Exception as e:
-                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+                    st.sidebar.error(f"❌ Upload Failed: {str(e# ✅ Fetch images after upload to ensure availability
+docs = db.collection("writing_samples")\
+         .where("school", "==", school_name)\
+         .where("year_group", "==", year_group)\
+         .stream()
 
-    # ✅ Fetch images from Firebase (Move outside the upload block)
-    image_pool = {"GDS": [], "EXS": [], "WTS": []}
+retrieved_images = []  # ✅ Ensure images are stored properly
+image_pool = {"GDS": [], "EXS": [], "WTS": []}
 
-    docs = db.collection("writing_samples")\
-             .where("school", "==", school_name)\
-             .where("year_group", "==", year_group)\
-             .stream()
+for doc in docs:
+    data = doc.to_dict()
+    if "image_url" in data and "grade_label" in data:
+        retrieved_images.append(data["image_url"])  # ✅ Append images properly
+        image_pool[data["grade_label"]].append(data["image_url"])
+        st.session_state.image_comparison_counts[data["image_url"]] = 0
 
-    st.session_state.image_urls = []
+# ✅ Store images only if retrieval was successful
+if retrieved_images:
+    st.session_state.image_urls = retrieved_images
+else:
+    st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
 
-    for doc in docs:
-        data = doc.to_dict()
-        if "image_url" in data and "grade_label" in data:
-            image_pool[data["grade_label"]].append(data["image_url"])
-            st.session_state.image_urls.append(data["image_url"])
-            st.session_state.image_comparison_counts[data["image_url"]] = 0
+# ✅ Ensure fair sample distribution across GDS, EXS, and WTS
+sample_pool = {"GDS": [], "EXS": [], "WTS": []}
 
-    # ✅ Ensure pairings exist before processing
-    if "pairings" not in st.session_state:
-        st.session_state.pairings = []
+for img_url in st.session_state.image_urls:
+    for grade, images in image_pool.items():
+        if img_url in images:
+            sample_pool[grade].append(img_url)
 
-    # ✅ Process one pair at a time using click-to-select
-    if st.session_state.pairings:
-        img1, img2, _ = st.session_state.pairings.pop(0)
+# ✅ Generate pairs from mixed ability levels
+all_pairs = []
+for grade, images in sample_pool.items():
+    if len(images) > 1:  # ✅ Ensure there are enough images to create pairs
+        random.shuffle(images)
+        for pair in itertools.combinations(images, 2):
+            all_pairs.append((pair[0], pair[1], grade))
 
-        col1, col2 = st.columns(2)
+random.shuffle(all_pairs)
 
-        col1.image(img1, use_container_width=True)
-        if col1.button("Select", key=f"vote_{img1}_{img2}"):
-            store_comparison(img1, img2, school_name, year_group)
-            st.rerun()
+# ✅ Prioritize images with fewer comparisons
+if all_pairs:
+    all_pairs.sort(key=lambda pair: (
+        st.session_state.image_comparison_counts.get(pair[0], 0) +
+        st.session_state.image_comparison_counts.get(pair[1], 0)
+    ))
 
-        col2.image(img2, use_container_width=True)
-        if col2.button("Select", key=f"vote_{img2}_{img1}"):
-            store_comparison(img2, img1, school_name, year_group)
-            st.rerun()
+    # ✅ Ensure `num_pairs` doesn't exceed available pairs
+    num_pairs = min(40, len(all_pairs))
+    st.session_state.pairings = all_pairs[:num_pairs]
 
+else:
+    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
+# ✅ Process one pair at a time using click-to-select
+if st.session_state.pairings:
+    img1, img2, _ = st.session_state.pairings.pop(0)
+
+    col1, col2 = st.columns(2)
+
+    col1.image(img1, use_container_width=True)
+    if col1.button("Select", key=f"vote_{img1}_{img2}"):
+        store_comparison(img1, img2, school_name, year_group)
+        st.rerun()
+
+    col2.image(img2, use_container_width=True)
+    if col2.button("Select", key=f"vote_{img2}_{img1}"):
+        store_comparison(img2, img1, school_name, year_group)
+        st.rerun()
 
 # ✅ Fetch all stored comparisons from Firestore
 def fetch_all_comparisons(school_name, year_group):
