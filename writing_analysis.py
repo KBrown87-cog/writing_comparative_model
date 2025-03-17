@@ -238,10 +238,13 @@ if st.session_state.pairings:
     # ✅ Automatically store the comparison in Firestore
     try:
         db.collection("comparisons").add({
-            "school": school_name,
-            "year_group": year_group,
-            "image_1": img1,
-            "image_2": img2,
+    "school": school_name,
+    "year_group": year_group,
+    "image_1": img1,
+    "image_2": img2,
+    "timestamp": firestore.SERVER_TIMESTAMP  # ✅ Add missing entry or close properly
+})
+
       
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
