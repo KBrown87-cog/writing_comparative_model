@@ -10,16 +10,31 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
-# ✅ Fetch All Comparisons Function (Place this before Firebase initialization)
+# 🔹 Firebase Initialization (Ensure it's initialized)
+if not firebase_admin._apps:
+    cred = credentials.Certificate("path/to/firebase_credentials.json")  # Update with actual path
+    firebase_admin.initialize_app(cred, {
+        "storageBucket": "your-project-id.appspot.com"  # Replace with your Firebase Storage bucket
+    })
+
+# ✅ Define fetch_all_comparisons
 def fetch_all_comparisons(school_name, year_group):
     """Fetches all writing comparisons for a given school and year group from Firestore."""
-    
+    db = firestore.client()
     comparisons_ref = db.collection("comparisons")\
-                        .where(filter=firestore.FieldFilter("school", "==", school_name))\
-                        .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+                        .where("school", "==", school_name)\
+                        .where("year_group", "==", year_group)\
                         .stream()
     
     return [doc.to_dict() for doc in comparisons_ref]
+
+# 🔹 Call the function where needed
+if "year_group" in st.session_state and st.session_state.year_group:
+    stored_comparisons = fetch_all_comparisons(st.session_state.school_name, st.session_state.year_group)
+else:
+    stored_comparisons = []
+    st.warning("⚠️ Please select a year group first.")
+
 
 
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
@@ -124,31 +139,34 @@ else:
 
 
 
-# ✅ Define function to store user comparison (Moved to Global Scope)
-def store_comparison(img1, img2, school_name, year_group):
-    """Stores the user's comparison selection in Firestore."""
+def store_comparison(img1, img2, school_name, year_group, winner):
+    """Stores the user's comparison selection in Firestore and ensures data integrity."""
     try:
-        # ✅ Ensure last selected image exists before assigning winner
-        if "last_selected" not in st.session_state:
-            st.error("❌ No selection recorded. Please select an image first.")
-            return  
+        # ✅ Generate a unique ID for this comparison
+        comparison_id = f"{school_name}_{year_group}_{hashlib.sha256((img1 + img2).encode()).hexdigest()[:20]}"
+        comparison_ref = db.collection("comparisons").document(comparison_id)
 
-        # ✅ Determine winner based on user selection
-        winner = img1 if st.session_state.last_selected == img1 else img2
-
-        # ✅ Log the winner selection
-        st.success(f"✅ User selected: {winner}")
-
-        # ✅ Store comparison in Firestore
-        db.collection("comparisons").add({
-            "school": school_name,
-            "year_group": year_group,
-            "image_1": img1,
-            "image_2": img2,
-            "winner": winner,  
-            "timestamp": firestore.SERVER_TIMESTAMP,
-            "comparison_count": firestore.Increment(1)  
-        }, merge=True)  
+        # ✅ Check if the document exists
+        comparison_doc = comparison_ref.get()
+        if not comparison_doc.exists:
+            # ✅ Create new document with default values if missing
+            comparison_ref.set({
+                "school": school_name,
+                "year_group": year_group,
+                "image_1": img1,
+                "image_2": img2,
+                "winner": winner,
+                "comparison_count": 1,  # Initialize counter
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+            st.success("✅ New comparison stored successfully!")  # Debugging feedback
+        else:
+            # ✅ Increment comparison count if document already exists
+            comparison_ref.update({
+                "comparison_count": firestore.Increment(1),
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+            st.success("✅ Comparison updated successfully!")  # Debugging feedback
 
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
@@ -231,9 +249,9 @@ if st.session_state.logged_in:
     st.sidebar.header("Select Year Group")
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-    if year_group != st.session_state.year_group:
-        clean_year_group = year_group.replace("Year ", "").strip()
-        st.session_state.year_group = f"Year {clean_year_group}"
+    # ✅ Ensure the selected year group updates session state correctly
+    if year_group != st.session_state.get("year_group", ""):
+        st.session_state.year_group = year_group
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
 
@@ -270,9 +288,11 @@ if st.session_state.logged_in:
                     continue
 
                 try:
+                    # ✅ Upload file to Firebase Storage
                     blob = bucket.blob(firebase_path)
                     blob.upload_from_file(uploaded_file, content_type="image/jpeg")
 
+                    # ✅ Store metadata in Firestore
                     db.collection("writing_samples").add({
                         "school": school_name,
                         "year_group": year_group,
@@ -392,28 +412,10 @@ while len(all_pairs) < max_pairs:
         all_pairs.add(pair)
         pairing_attempts[selected_grade] += 1
 
-    # ✅ Break if no more valid pairs can be formed
-    if sum(len(sample_pool[k]) for k in sample_pool) < 2:
-        break
+st.write("DEBUG: Generated Pairs", list(all_pairs))
 
-st.write("DEBUG: Generated Pairs Before Sorting", list(all_pairs))
-
-# ✅ Initialize comparison counts before sorting
-if "image_comparison_counts" not in st.session_state:
-    st.session_state.image_comparison_counts = {}
-
-if all_pairs:
-    # ✅ Sort pairs by the number of times they have been compared
-    sorted_pairs = sorted(all_pairs, key=lambda pair: (
-        st.session_state.image_comparison_counts.get(pair[0], 0) +
-        st.session_state.image_comparison_counts.get(pair[1], 0)
-    ))
-
-    # ✅ Store the selected pairs
-    st.session_state.pairings = sorted_pairs
-    st.write("DEBUG: Final Sorted Pairings", st.session_state.pairings)
-else:
-    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+# ✅ Store the selected pairs
+st.session_state.pairings = list(all_pairs)
 
 
 # ✅ Calculate Rankings Using Bradley-Terry Model
