@@ -236,13 +236,13 @@ if st.session_state.pairings:
                 st.rerun()
 
     try:
-    db.collection("comparisons").add({  # ✅ Now properly indented
-        "school": school_name,
-        "year_group": year_group,
-        "image_1": img1,
-        "image_2": img2,
-        "timestamp": firestore.SERVER_TIMESTAMP
-    })
+        db.collection("comparisons").add({  # ✅ Now properly indented
+            "school": school_name,
+            "year_group": year_group,
+            "image_1": img1,
+            "image_2": img2,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
 
