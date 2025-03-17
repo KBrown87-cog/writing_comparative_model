@@ -10,8 +10,12 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
-# ✅ Use the correct file path
-FIREBASE_CREDENTIALS_PATH = "/mnt/data/writing-comparison-firebase-adminsdk-fbsvc-204fe8b59b.json"
+import os
+
+import os
+
+# ✅ Define the absolute path to the credentials file
+FIREBASE_CREDENTIALS_PATH = "/Users/kerriebrown/Documents/writing_comparative_model/writing-comparison-firebase-adminsdk-fbsvc-204fe8b59b.json"
 
 # ✅ Prevent multiple Firebase initializations
 if not firebase_admin._apps:
