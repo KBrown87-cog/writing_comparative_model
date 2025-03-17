@@ -333,11 +333,15 @@ while len(all_pairs) < 40:
     images = sample_pool[selected_grade]
 
     if len(images) > 1:
-        pair = random.sample(images, 2)
+        pair = random.sample(images, 2)  # ✅ Pair within the same category
     elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # ✅ Pair GDS and WTS
+    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["EXS"]) > 0:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # ✅ Pair GDS and EXS
+    elif len(sample_pool["EXS"]) > 0 and len(sample_pool["WTS"]) > 0:
+        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # ✅ Pair EXS and WTS
     else:
-        # ✅ Final Fallback: Select any available pair
+        # ✅ Final Fallback: Select any available pair from different categories
         all_images = [img for g in sample_pool.values() for img in g]
         if len(all_images) > 1:
             pair = random.sample(all_images, 2)
@@ -355,6 +359,7 @@ while len(all_pairs) < 40:
 
 random.shuffle(all_pairs)
 st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
+
 
 # ✅ Prioritize images with fewer comparisons while balancing categories
 if "image_comparison_counts" not in st.session_state:
