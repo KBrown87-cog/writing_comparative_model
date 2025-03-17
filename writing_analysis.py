@@ -236,20 +236,22 @@ if st.session_state.pairings:
                 st.rerun()
 
     try:
-    db.collection("comparisons").add({  # ✅ Indented correctly!
+    db.collection("comparisons").add({  # ✅ Now properly indented
         "school": school_name,
         "year_group": year_group,
         "image_1": img1,
         "image_2": img2,
         "timestamp": firestore.SERVER_TIMESTAMP
     })
-except Exception as e:
-    st.error(f"❌ Failed to store comparison: {str(e)}")
+    except Exception as e:
+        st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
 
       
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore."""
+
     try:
         # ✅ Generate Firestore document IDs
         selected_doc_id = hashlib.sha256(selected_image.encode()).hexdigest()[:20]
