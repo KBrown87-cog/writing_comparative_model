@@ -206,22 +206,72 @@ if st.session_state.logged_in:
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
 
-        # ✅ Initialize image pool at the correct location
-        image_pool = {"GDS": [], "EXS": [], "WTS": []}
+    # ✅ Upload Section (Ensure this appears in the sidebar)
+    st.sidebar.header("Upload Writing Samples")
+    
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
+    )
 
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
+    # ✅ Ensure grade_labels dictionary exists
+    grade_labels = {}
 
-        st.session_state.image_urls = []
+    if uploaded_files:
+        with st.sidebar.form("upload_form"):
+            for uploaded_file in uploaded_files:
+                grade_labels[uploaded_file.name] = st.selectbox(
+                    f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
+                )
 
-        for doc in docs:
-            data = doc.to_dict()
-            if "image_url" in data and "grade_label" in data:
-                image_pool[data["grade_label"]].append(data["image_url"])
-                st.session_state.image_urls.append(data["image_url"])
-                st.session_state.image_comparison_counts[data["image_url"]] = 0
+            submit_button = st.form_submit_button("Confirm Upload")
+
+        if submit_button:
+            for uploaded_file in uploaded_files:
+                grade_label = grade_labels[uploaded_file.name]
+
+                try:
+                    filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
+                    firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
+
+                    blob = bucket.blob(firebase_path)
+                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+
+                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
+                    db.collection("writing_samples").add({
+                        "school": school_name,
+                        "year_group": year_group,
+                        "image_url": image_url,
+                        "filename": filename,
+                        "grade_label": grade_label
+                    })
+
+                    st.session_state.image_urls.append(image_url)
+                    st.session_state.image_comparison_counts[image_url] = 0
+                    st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+
+                except Exception as e:
+                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+    # ✅ Fetch images from Firebase (Move outside the upload block)
+    image_pool = {"GDS": [], "EXS": [], "WTS": []}
+
+    docs = db.collection("writing_samples")\
+             .where("school", "==", school_name)\
+             .where("year_group", "==", year_group)\
+             .stream()
+
+    st.session_state.image_urls = []
+
+    for doc in docs:
+        data = doc.to_dict()
+        if "image_url" in data and "grade_label" in data:
+            image_pool[data["grade_label"]].append(data["image_url"])
+            st.session_state.image_urls.append(data["image_url"])
+            st.session_state.image_comparison_counts[data["image_url"]] = 0
+
+    # ✅ Ensure pairings exist before processing
+    if "pairings" not in st.session_state:
+        st.session_state.pairings = []
 
     # ✅ Process one pair at a time using click-to-select
     if st.session_state.pairings:
@@ -238,6 +288,7 @@ if st.session_state.logged_in:
         if col2.button("Select", key=f"vote_{img2}_{img1}"):
             store_comparison(img2, img1, school_name, year_group)
             st.rerun()
+
 
 
 # ✅ Fetch all stored comparisons from Firestore
