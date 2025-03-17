@@ -126,7 +126,6 @@ if st.session_state.logged_in:
             st.rerun()
 
 
-
     try:
         db.collection("comparisons").add({  # ✅ Now properly indented
             "school": school_name,
