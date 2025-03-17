@@ -304,6 +304,7 @@ for doc in docs:
             st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
         st.session_state.image_comparison_counts[data["image_url"]] = 0
 
+# ✅ Ensure images are retrieved successfully
 if retrieved_images:
     st.session_state.image_urls = retrieved_images
 else:
@@ -313,20 +314,40 @@ else:
 # ✅ Debugging: Ensure images are retrieved correctly
 st.write("DEBUG: Retrieved Images", st.session_state.image_urls)
 
+# ✅ Ensure fair sample distribution across GDS, EXS, and WTS
+sample_pool = {"GDS": [], "EXS": [], "WTS": []}
+
+for img_url in st.session_state.image_urls:
+    found = False
+    for grade in image_pool.keys():
+        if img_url in image_pool[grade]:
+            sample_pool[grade].append(img_url)
+            found = True
+            break
+    if not found:
+        st.warning(f"⚠️ Image {img_url} is not categorized correctly and won't be paired.")
+
 # ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
 
 while len(all_pairs) < 40:
-    selected_grade = random.choices(list(image_pool.keys()), weights=[len(image_pool[g]) for g in image_pool])[0]
-    images = image_pool[selected_grade]
+    selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
+    images = sample_pool[selected_grade]
 
     if len(images) > 1:
         pair = random.sample(images, 2)
-    elif len(image_pool["GDS"]) > 0 and len(image_pool["WTS"]) > 0:
-        pair = (random.choice(image_pool["GDS"]), random.choice(image_pool["WTS"]))
+    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))
     else:
-        continue
+        # ✅ Fallback: Select the next available category with images
+        available_grades = [g for g in sample_pool if len(sample_pool[g]) > 1]
+        if available_grades:
+            selected_grade = random.choice(available_grades)
+            images = sample_pool[selected_grade]
+            pair = random.sample(images, 2)
+        else:
+            continue  # Skip if no valid pairing is found
 
     if pair not in all_pairs:
         all_pairs.append(pair)
@@ -339,11 +360,6 @@ random.shuffle(all_pairs)
 
 # ✅ Debugging: Ensure pairings are created
 st.write("DEBUG: Generated Pairs", all_pairs)
-
-if all_pairs:
-    st.session_state.pairings = all_pairs
-else:
-    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
 # ✅ Prioritize images with fewer comparisons while balancing categories
 if "image_comparison_counts" not in st.session_state:
