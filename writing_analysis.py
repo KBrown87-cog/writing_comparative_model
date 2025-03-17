@@ -207,50 +207,62 @@ if st.session_state.logged_in:
         st.session_state.image_comparison_counts = {}
 
     # ✅ Upload Section (Ensure this appears in the sidebar)
-    st.sidebar.header("Upload Writing Samples")
-    
-    uploaded_files = st.sidebar.file_uploader(
-        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
-    )
+st.sidebar.header("Upload Writing Samples")
 
-    # ✅ Ensure grade_labels dictionary exists
-    grade_labels = {}
+# ✅ Ensure year_group is formatted correctly
+year_group = f"Year {st.session_state.year_group}".strip()  # ✅ Fixes "YearYear" duplication
 
-    if uploaded_files:
-        with st.sidebar.form("upload_form"):
-            for uploaded_file in uploaded_files:
-                grade_labels[uploaded_file.name] = st.selectbox(
-                    f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
-                )
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
+)
 
-            submit_button = st.form_submit_button("Confirm Upload")
+# ✅ Ensure grade_labels dictionary exists
+grade_labels = {}
 
-        if submit_button:
-            for uploaded_file in uploaded_files:
-                grade_label = grade_labels[uploaded_file.name]
+if uploaded_files:
+    with st.sidebar.form("upload_form"):
+        for uploaded_file in uploaded_files:
+            grade_labels[uploaded_file.name] = st.selectbox(
+                f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
+            )
 
-                try:
-                    filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
-                    firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
+        submit_button = st.form_submit_button("Confirm Upload")
 
-                    blob = bucket.blob(firebase_path)
-                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+    if submit_button:
+        uploaded_image_urls = []  # ✅ Collect image URLs before updating session state
 
-                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
-                    db.collection("writing_samples").add({
-                        "school": school_name,
-                        "year_group": year_group,
-                        "image_url": image_url,
-                        "filename": filename,
-                        "grade_label": grade_label
-                    })
+        for uploaded_file in uploaded_files:
+            grade_label = grade_labels[uploaded_file.name]
 
-                    st.session_state.image_urls.append(image_url)
-                    st.session_state.image_comparison_counts[image_url] = 0
-                    st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+            try:
+                filename = f"{school_name}_{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
+                firebase_path = f"writing_samples/{school_name}/{year_group}/{grade_label}/{filename}"
 
-                except Exception as e:
-                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")  # ✅ Correctly closed f-string
+                blob = bucket.blob(firebase_path)
+                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+
+                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
+                
+                db.collection("writing_samples").add({
+                    "school": school_name,
+                    "year_group": year_group,
+                    "image_url": image_url,
+                    "filename": filename,
+                    "grade_label": grade_label
+                })
+
+                uploaded_image_urls.append(image_url)  # ✅ Collect URLs instead of appending inside loop
+                st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+
+            except Exception as e:
+                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+        # ✅ Update session state after all images are processed
+        if uploaded_image_urls:
+            st.session_state.image_urls.extend(uploaded_image_urls)
+
+        # ✅ Debugging: Ensure uploaded images are stored in session state
+        st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
