@@ -225,233 +225,140 @@ if st.session_state.logged_in:
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
 
-    # ✅ Upload Section (Ensure this appears in the sidebar)
-st.sidebar.header("Upload Writing Samples")
+    # ✅ Upload Section
+    st.sidebar.header("Upload Writing Samples")
 
-# ✅ Ensure year_group is formatted correctly
-year_group = st.session_state.year_group  # ✅ Use correctly formatted year_group
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
+    )
 
-uploaded_files = st.sidebar.file_uploader(
-    "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
-)
+    grade_labels = {}
 
-# ✅ Ensure `year_group` is formatted correctly before using it in Firestore and Storage paths
+    if uploaded_files:
+        with st.sidebar.form("upload_form"):
+            for uploaded_file in uploaded_files:
+                grade_labels[uploaded_file.name] = st.selectbox(
+                    f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
+                )
+
+            submit_button = st.form_submit_button("Confirm Upload")
+
+        if submit_button:
+            uploaded_image_urls = []
+            existing_urls = set(st.session_state.image_urls)
+
+            for uploaded_file in uploaded_files:
+                grade_label = grade_labels.get(uploaded_file.name, "EXS")
+                filename = f"{school_name}_{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
+                firebase_path = f"writing_samples/{school_name}/{year_group}/{grade_label}/{filename}"
+                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
+
+                if image_url in existing_urls:
+                    st.sidebar.warning(f"⚠️ {uploaded_file.name} was already uploaded. Skipping.")
+                    continue
+
+                try:
+                    blob = bucket.blob(firebase_path)
+                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+
+                    db.collection("writing_samples").add({
+                        "school": school_name,
+                        "year_group": year_group,
+                        "image_url": image_url,
+                        "filename": filename,
+                        "grade_label": grade_label
+                    })
+
+                    uploaded_image_urls.append(image_url)
+                    st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+
+                except Exception as e:
+                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+            if uploaded_image_urls:
+                st.session_state.image_urls.extend(uploaded_image_urls)
+
+            # ✅ Debugging: Ensure uploaded images are stored
+            st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
+
+# ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
-    if not st.session_state.year_group.startswith("Year "):
-        clean_year_group = st.session_state.year_group.replace("Year ", "").strip()
-        st.session_state.year_group = f"Year {clean_year_group}"
-
-
-year_group = st.session_state.get("year_group", "Year 1")  # ✅ Use default "Year 1" if missing
-
-grade_labels = {}  # ✅ Ensure grade_labels dictionary exists
-
-if uploaded_files:
-    with st.sidebar.form("upload_form"):
-        for uploaded_file in uploaded_files:
-            grade_labels[uploaded_file.name] = st.selectbox(
-                f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
-            )
-
-        submit_button = st.form_submit_button("Confirm Upload")
-
-    if submit_button:  # ✅ Correct indentation
-        uploaded_image_urls = []  # ✅ Now correctly indented
-        existing_urls = set(st.session_state.image_urls)  # ✅ Now correctly indented
-
-        for uploaded_file in uploaded_files:
-            grade_label = grade_labels.get(uploaded_file.name, "EXS")  # ✅ Default to EXS if missing
-            filename = f"{school_name}_{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
-            firebase_path = f"writing_samples/{school_name}/{year_group}/{grade_label}/{filename}"
-            image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
-
-            if image_url in existing_urls:
-                st.sidebar.warning(f"⚠️ {uploaded_file.name} was already uploaded. Skipping.")
-                continue  # ✅ Skip re-uploading the same image
-
-            try:
-                blob = bucket.blob(firebase_path)
-                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-
-                db.collection("writing_samples").add({
-                    "school": school_name,
-                    "year_group": year_group,
-                    "image_url": image_url,
-                    "filename": filename,
-                    "grade_label": grade_label
-                })
-
-                uploaded_image_urls.append(image_url)
-                st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
-
-            except Exception as e:
-                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
-
-        # ✅ Update session state after all images are processed
-        if uploaded_image_urls:
-            st.session_state.image_urls.extend(uploaded_image_urls)
-
-        # ✅ Debugging: Ensure uploaded images are stored in session state
-        st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
-
-
-# ✅ Ensure year_group is formatted correctly before querying Firestore
-if "year_group" in st.session_state and st.session_state.year_group:
-    if not st.session_state.year_group.startswith("Year "):  # ✅ Prevent multiple "Year" prefixes
-        clean_year_group = st.session_state.year_group.replace("Year ", "").strip()
-        st.session_state.year_group = f"Year {clean_year_group}"
-
-
-    year_group = st.session_state.year_group  # ✅ Use correctly formatted year group
-
     docs = db.collection("writing_samples")\
              .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
-             .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+             .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
              .stream()
 else:
-    docs = []  # Prevents errors if no year group is selected
+    docs = []
     st.warning("⚠️ Please select a year group first.")
 
-
-
-retrieved_images = []  # ✅ Ensure images are stored properly
+retrieved_images = []
 image_pool = {"GDS": [], "EXS": [], "WTS": []}
 
 for doc in docs:
     data = doc.to_dict()
     if "image_url" in data and "grade_label" in data:
-        retrieved_images.append(data["image_url"])  # ✅ Append images properly
+        retrieved_images.append(data["image_url"])
         if data["grade_label"] in image_pool:
             image_pool[data["grade_label"]].append(data["image_url"])
         else:
             st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
         st.session_state.image_comparison_counts[data["image_url"]] = 0
 
-# ✅ Store images only if retrieval was successful
 if retrieved_images:
     st.session_state.image_urls = retrieved_images
 else:
     st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
-    st.stop()  # ✅ Prevents further execution if no images exist
+    st.stop()
 
-# ✅ Ensure fair sample distribution across GDS, EXS, and WTS
-sample_pool = {"GDS": [], "EXS": [], "WTS": []}
-
-for img_url in st.session_state.image_urls:
-    for grade, images in image_pool.items():
-        if img_url in images:
-            sample_pool[grade].append(img_url)
+# ✅ Debugging: Ensure images are retrieved correctly
+st.write("DEBUG: Retrieved Images", st.session_state.image_urls)
 
 # ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
 
-# ✅ Ensure mixed ability level pairings with proportional weighting
-while len(all_pairs) < 40:  # ✅ Adjust number of pairs if needed
-    selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
-    images = sample_pool[selected_grade]
+while len(all_pairs) < 40:
+    selected_grade = random.choices(list(image_pool.keys()), weights=[len(image_pool[g]) for g in image_pool])[0]
+    images = image_pool[selected_grade]
 
     if len(images) > 1:
-        pair = random.sample(images, 2)  # ✅ Same-category pairing
-    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # ✅ Cross-category pairing
+        pair = random.sample(images, 2)
+    elif len(image_pool["GDS"]) > 0 and len(image_pool["WTS"]) > 0:
+        pair = (random.choice(image_pool["GDS"]), random.choice(image_pool["WTS"]))
     else:
-        continue  # ✅ Skip if no valid pairing
+        continue
 
-    if pair not in all_pairs:  # ✅ Prevent duplicate pairs
+    if pair not in all_pairs:
         all_pairs.append(pair)
         pairing_attempts[selected_grade] += 1
 
     if sum(pairing_attempts.values()) >= 40:
-        break  # ✅ Stop once enough pairs are generated
+        break
 
 random.shuffle(all_pairs)
 
-# ✅ Ensure `image_comparison_counts` is initialized
+# ✅ Debugging: Ensure pairings are created
+st.write("DEBUG: Generated Pairs", all_pairs)
+
+if all_pairs:
+    st.session_state.pairings = all_pairs
+else:
+    st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+
+# ✅ Prioritize images with fewer comparisons while balancing categories
 if "image_comparison_counts" not in st.session_state:
     st.session_state.image_comparison_counts = {}
 
-# ✅ Prioritize images with fewer comparisons while balancing categories
 if all_pairs:
     all_pairs.sort(key=lambda pair: (
         st.session_state.image_comparison_counts.get(pair[0], 0) +
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
-    # ✅ Ensure a balanced mix of GDS, EXS, and WTS pairings
-    balanced_pairs = []
-    category_counts = {"GDS": 0, "EXS": 0, "WTS": 0}
-
-    for pair in all_pairs:
-        img1, img2, grade = pair
-        if category_counts[grade] < 15:  # ✅ Adjust category limits as needed
-            balanced_pairs.append(pair)
-            category_counts[grade] += 1
-
     # ✅ Store the selected pairs
-    st.session_state.pairings = balanced_pairs if balanced_pairs else all_pairs  # Use balanced pairs if possible
+    st.session_state.pairings = all_pairs
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
-
-# ✅ Process one pair at a time using click-to-select
-if st.session_state.pairings:
-    img1, img2 = st.session_state.pairings.pop(0)
-
-    col1, col2 = st.columns(2)
-
-    col1.image(img1, use_container_width=True)
-    if col1.button("Select", key=f"vote_{img1}_{img2}"):
-        store_comparison(img1, img2, school_name, year_group)
-        st.rerun()
-
-    col2.image(img2, use_container_width=True)
-    if col2.button("Select", key=f"vote_{img2}_{img1}"):
-        store_comparison(img2, img1, school_name, year_group)
-        st.rerun()
-
-
-# ✅ Fetch all stored comparisons from Firestore
-def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored comparisons from Firestore for the selected year group, ordered by most recent."""
-    try:
-        # ✅ Ensure year_group is formatted correctly before querying
-        if not year_group.startswith("Year "):
-            clean_year_group = year_group.replace("Year ", "").strip()
-            year_group = f"Year {clean_year_group}"
-
-
-        docs = (
-            db.collection("comparisons")
-            .where("school", "==", school_name)
-            .where("year_group", "==", year_group)  # ✅ Use correctly formatted year_group
-            .order_by("timestamp", direction=firestore.Query.DESCENDING)  # ✅ Sort by most recent comparisons
-            .limit(100)  # ✅ Prevent excessive reads (adjust as needed)
-            .stream()
-        )
-
-        comparisons = []
-        for doc in docs:
-            data = doc.to_dict()
-
-            img1 = data.get("image_1")
-            img2 = data.get("image_2")
-            winner = data.get("winner", img1)  # ✅ Default to img1 if winner is missing
-            comparison_count = data.get("comparison_count", 0)  # ✅ Track how many times this pair was compared
-
-            # ✅ Ensure data integrity before adding to the list
-            if img1 and img2:
-                comparisons.append((img1, img2, winner, comparison_count))
-
-        if not comparisons:
-            st.info("ℹ️ No comparisons found for the selected year group yet. Start making comparisons!")
-
-        return comparisons
-    except Exception as e:
-        st.error(f"❌ Failed to fetch comparison data: {str(e)}")
-        return []
-
-
-
 
 # ✅ Calculate Rankings Using Bradley-Terry Model
 def calculate_rankings(comparisons):
