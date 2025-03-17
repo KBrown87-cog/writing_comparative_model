@@ -252,6 +252,7 @@ if st.session_state.logged_in:
                 except Exception as e:
                     st.sidebar.error(f"❌ Upload Failed: {str(e)}")  # ✅ Correctly closed f-string
 
+# ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
     docs = db.collection("writing_samples")\
              .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
@@ -261,7 +262,6 @@ else:
     docs = []  # Prevents errors if no year group is selected
     st.warning("⚠️ Please select a year group first.")
 
-
 retrieved_images = []  # ✅ Ensure images are stored properly
 image_pool = {"GDS": [], "EXS": [], "WTS": []}
 
@@ -269,7 +269,10 @@ for doc in docs:
     data = doc.to_dict()
     if "image_url" in data and "grade_label" in data:
         retrieved_images.append(data["image_url"])  # ✅ Append images properly
-        image_pool[data["grade_label"]].append(data["image_url"])
+        if data["grade_label"] in image_pool:
+            image_pool[data["grade_label"]].append(data["image_url"])
+        else:
+            st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
         st.session_state.image_comparison_counts[data["image_url"]] = 0
 
 # ✅ Store images only if retrieval was successful
@@ -277,6 +280,7 @@ if retrieved_images:
     st.session_state.image_urls = retrieved_images
 else:
     st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
+    st.stop()  # ✅ Prevents further execution if no images exist
 
 # ✅ Ensure fair sample distribution across GDS, EXS, and WTS
 sample_pool = {"GDS": [], "EXS": [], "WTS": []}
@@ -286,28 +290,19 @@ for img_url in st.session_state.image_urls:
         if img_url in images:
             sample_pool[grade].append(img_url)
 
-# ✅ Get real uploaded proportions
-total_images = sum(len(images) for images in sample_pool.values())
-if total_images == 0:
-    st.warning("⚠️ No valid images available for pairing. Upload images first.")
-    st.stop()
-
-proportions = {grade: len(images) / total_images for grade, images in sample_pool.items()}
-
 # ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
 pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
 
-# ✅ Ensure mixed ability level pairings
+# ✅ Ensure mixed ability level pairings with proportional weighting
 while len(all_pairs) < 40:  # ✅ Adjust number of pairs if needed
-    selected_grade = random.choices(list(proportions.keys()), weights=proportions.values())[0]
+    selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
     images = sample_pool[selected_grade]
 
-    # ✅ Ensure at least one cross-category pairing
-    if selected_grade == "EXS" and len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))
-    elif len(images) > 1:
-        pair = random.sample(images, 2)
+    if len(images) > 1:
+        pair = random.sample(images, 2)  # ✅ Same-category pairing
+    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # ✅ Cross-category pairing
     else:
         continue  # ✅ Skip if no valid pairing
 
@@ -331,6 +326,7 @@ if all_pairs:
     st.session_state.pairings = all_pairs
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
+    st.stop()  # ✅ Prevents further execution if no pairs exist
 
 # ✅ Process one pair at a time using click-to-select
 if st.session_state.pairings:
