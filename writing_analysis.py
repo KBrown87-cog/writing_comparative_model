@@ -275,18 +275,19 @@ if uploaded_files:
         # ✅ Debugging: Ensure uploaded images are stored in session state
         st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
-# ✅ Fetch images after upload to ensure availability
+# ✅ Ensure year_group exists before querying Firestore
 if "year_group" in st.session_state and st.session_state.year_group:
-    year_group = f"Year {st.session_state.year_group}".strip()  # ✅ Define year_group first
+    year_group = f"Year {st.session_state.year_group}".strip()
 
-docs = db.collection("writing_samples")\
-         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
-         .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
-         .stream()
-
+    docs = db.collection("writing_samples")\
+             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+             .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+             .stream()
 else:
     docs = []  # Prevents errors if no year group is selected
     st.warning("⚠️ Please select a year group first.")
+
+
 
 retrieved_images = []  # ✅ Ensure images are stored properly
 image_pool = {"GDS": [], "EXS": [], "WTS": []}
