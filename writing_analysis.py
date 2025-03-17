@@ -277,8 +277,7 @@ if uploaded_files:
 
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
-    docs = db.collection("writing_samples")\
-             year_group = f"Year {st.session_state.year_group}".strip()
+    year_group = f"Year {st.session_state.year_group}".strip()  # ✅ Define year_group first
 
 docs = db.collection("writing_samples")\
          .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
