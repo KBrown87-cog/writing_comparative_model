@@ -16,7 +16,7 @@ def fetch_all_comparisons(school_name, year_group):
     db = firestore.client()
     comparisons_ref = db.collection("comparisons")\
                         .where("school", "==", school_name)\
-                        .where("year_group", "==", year_group)\
+                        .where(filter=firestore.FieldFilter("year_group", "==", year_group))
                         .stream()
     
     return [doc.to_dict() for doc in comparisons_ref]
@@ -515,12 +515,11 @@ def fetch_ranked_images(school_name, year_group):
             year_group = f"Year {clean_year_group}"
 
 
-        docs = (
-            db.collection("rankings")
-            .where("school", "==", school_name)
-            .where("year_group", "==", year_group)  # ✅ Use correctly formatted year_group
-            .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort in Firestore query
-            .stream()  # ✅ Now properly aligned
+        docs = db.collection("writing_samples")\
+         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+         .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+         .stream()
+        
         )
 
         scores = []
