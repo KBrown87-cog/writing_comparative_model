@@ -315,18 +315,31 @@ while len(all_pairs) < 40:  # ✅ Adjust number of pairs if needed
 
 random.shuffle(all_pairs)
 
-# ✅ Prioritize images with fewer comparisons
+# ✅ Ensure `image_comparison_counts` is initialized
+if "image_comparison_counts" not in st.session_state:
+    st.session_state.image_comparison_counts = {}
+
+# ✅ Prioritize images with fewer comparisons while balancing categories
 if all_pairs:
     all_pairs.sort(key=lambda pair: (
         st.session_state.image_comparison_counts.get(pair[0], 0) +
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
+    # ✅ Ensure a balanced mix of GDS, EXS, and WTS pairings
+    balanced_pairs = []
+    category_counts = {"GDS": 0, "EXS": 0, "WTS": 0}
+
+    for pair in all_pairs:
+        img1, img2, grade = pair
+        if category_counts[grade] < 15:  # ✅ Adjust category limits as needed
+            balanced_pairs.append(pair)
+            category_counts[grade] += 1
+
     # ✅ Store the selected pairs
-    st.session_state.pairings = all_pairs
+    st.session_state.pairings = balanced_pairs if balanced_pairs else all_pairs  # Use balanced pairs if possible
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
-    st.stop()  # ✅ Prevents further execution if no pairs exist
 
 # ✅ Process one pair at a time using click-to-select
 if st.session_state.pairings:
