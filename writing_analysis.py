@@ -281,46 +281,70 @@ def fetch_all_comparisons(school_name, year_group):
 
 
 
-
 # ✅ Calculate Rankings Using Bradley-Terry Model
 def calculate_rankings(comparisons):
-    """Applies Bradley-Terry Model to rank images."""
+    """Applies Bradley-Terry Model to rank images, incorporating weighting and convergence checks."""
     if not comparisons:
         st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
         return {}
 
-    # ✅ Extract unique image names
-    sample_names = list(set([img for pair in comparisons for img in pair[:2]]))  # Ensure only image names
-    initial_scores = {name: 0 for name in sample_names}
+    # ✅ Extract unique image names and count how many times each image was compared
+    comparison_counts = {}
+    for img1, img2, winner, _ in comparisons:  # Extract comparison count
+        comparison_counts[img1] = comparison_counts.get(img1, 0) + 1
+        comparison_counts[img2] = comparison_counts.get(img2, 0) + 1
+
+    # ✅ Remove images that were never compared
+    sample_names = [name for name, count in comparison_counts.items() if count > 0]
+
+    if not sample_names:
+        st.warning("⚠️ No valid image comparisons available for ranking.")
+        return {}
+
+    # ✅ Initialize scores with small random values to improve convergence
+    initial_scores = {name: np.random.uniform(-0.1, 0.1) for name in sample_names}
 
     try:
-        result = minimize(lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), comparisons),
-                          list(initial_scores.values()), method='BFGS')
+        # ✅ Perform ranking optimization with weightings based on comparison counts
+        result = minimize(
+            lambda s: bradley_terry_log_likelihood(dict(zip(sample_names, s)), comparisons, comparison_counts),
+            list(initial_scores.values()), 
+            method='BFGS'
+        )
+
+        # ✅ Check if optimization succeeded
+        if not result.success:
+            st.warning("⚠️ Optimization failed to converge. Using default scores.")
+            return {name: 0 for name in sample_names}  # Return neutral scores if failure
 
         return dict(zip(sample_names, result.x))
+
     except Exception as e:
         st.error(f"❌ Ranking Calculation Failed: {str(e)}")
         return {}
 
-
-
-# ✅ Bradley-Terry Model for Ranking
+# ✅ Bradley-Terry Model for Ranking with Weighting
 def bradley_terry_log_likelihood(scores, comparisons):
-    """Calculates likelihood for Bradley-Terry ranking."""
+    """Calculates likelihood for Bradley-Terry ranking with weighting."""
     likelihood = 0
 
     if not comparisons:
         st.error("❌ No comparisons received in Bradley-Terry function.")
         return float('inf')
 
-    for item1, item2, winner in comparisons:
-        s1, s2 = scores.get(item1, 0), scores.get(item2, 0)  # Default to 0
+    for img1, img2, winner, comparison_count in comparisons:
+        s1, s2 = scores.get(img1, 0), scores.get(img2, 0)  # Default scores
         exp_s1, exp_s2 = np.exp(s1), np.exp(s2)
-        p1 = exp_s1 / (exp_s1 + exp_s2)
-        p2 = exp_s2 / (exp_s1 + exp_s2)
 
-        # ✅ Apply logarithmic likelihood
-        likelihood += np.log(p1 if winner == item1 else p2)
+        # ✅ Compute win probabilities with log safety
+        p1 = max(exp_s1 / (exp_s1 + exp_s2), 1e-10)
+        p2 = max(exp_s2 / (exp_s1 + exp_s2), 1e-10)
+
+        # ✅ Apply weighting to ensure fair impact from multiple comparisons
+        weight = np.log(comparison_count + 1)  # More comparisons add stronger influence
+
+        # ✅ Apply logarithmic likelihood with weight
+        likelihood += weight * np.log(p1 if winner == img1 else p2)
 
     return -likelihood
 
@@ -331,17 +355,18 @@ stored_comparisons = fetch_all_comparisons(school_name, year_group)
 if stored_comparisons:
     rankings = calculate_rankings(stored_comparisons)
 
-    # ✅ Store Rankings in Firestore
+    # ✅ Store Rankings in Firestore with comparison count
     for image, score in rankings.items():
-        # ✅ Ensure image URL is sanitized before using it as a Firestore document ID
         doc_id = hashlib.sha256(image.encode()).hexdigest()[:20]  # Create a short, unique ID
 
         db.collection("rankings").document(doc_id).set({
             "school": school_name,
             "year_group": year_group,
-            "image_url": image,  # Store full image URL inside the document
-            "score": float(score)  # ✅ Store as float for consistency
+            "image_url": image,
+            "score": float(score),  # ✅ Store as float for consistency
+            "comparison_count": stored_comparisons.count(image)  # ✅ Store number of times this image was compared
         }, merge=True)
+
 
 # ✅ Define function to fetch ranked images before calling it
 def fetch_ranked_images(school_name, year_group):
@@ -350,30 +375,28 @@ def fetch_ranked_images(school_name, year_group):
         docs = db.collection("rankings")\
                  .where("school", "==", school_name)\
                  .where("year_group", "==", year_group)\
+                 .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort in Firestore query
                  .stream()
 
         scores = []
         for doc in docs:
             data = doc.to_dict()
-            if data.get("year_group") == year_group:  # ✅ Ensure only selected year group rankings appear
-                scores.append((data["image_url"], data.get("score", 0), data.get("votes", 0)))
+            if data.get("year_group") == year_group:
+                scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
 
-        # ✅ Sort images by score (higher score = better ranking)
-        return sorted(scores, key=lambda x: x[1], reverse=True)
+        return scores  # ✅ Already sorted in Firestore, no need to re-sort in Python
 
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
-
-
 
 # ✅ Now call `fetch_ranked_images` at the correct location
 ranked_images = fetch_ranked_images(school_name, year_group)
 
 # ✅ Display Rankings in a Table
 if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Votes"])
-    
+    df = pd.DataFrame(ranked_images, columns=["Writing Sample", "Score", "Comparison Count"])
+
     # ✅ Apply GDS, EXS, WTS thresholds based on percentiles
     wts_cutoff = np.percentile(df["Score"], 25)
     gds_cutoff = np.percentile(df["Score"], 75)
@@ -384,3 +407,4 @@ if ranked_images:
     st.sidebar.download_button("Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "writing_rankings.csv", "text/csv")
 else:
     st.warning("⚠️ No ranked images found for this year group. Begin voting to generate rankings.")
+
