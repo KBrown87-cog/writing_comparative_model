@@ -62,7 +62,6 @@ if "logged_in" not in st.session_state:
     st.session_state.rankings = []
     st.session_state.image_comparison_counts = {}
 
-# ✅ Ensure login form only appears if not logged in
 if not st.session_state.logged_in:
     st.sidebar.header("Login")
     school_name = st.sidebar.text_input("Enter School Name")
@@ -89,7 +88,6 @@ if st.session_state.logged_in:
     st.sidebar.header("Select Year Group")
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
-    # ✅ Ensure year group selection does not reset login state
     if year_group != st.session_state.year_group:
         st.session_state.year_group = year_group
         st.session_state.image_urls = []
@@ -101,137 +99,32 @@ if st.session_state.logged_in:
         st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
         st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
 
-    # ✅ Upload section
-    st.sidebar.header("Upload Writing Samples")
-    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
-
-    if uploaded_files:
-        for uploaded_file in uploaded_files:
-            try:
-                blob = bucket.blob(f"{school_name}/{year_group}/{uploaded_file.name}")
-                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
-                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{blob.name.replace('/', '%2F')}?alt=media"
-                db.collection("writing_samples").add({
-                    "school": school_name,
-                    "year_group": year_group,
-                    "image_url": image_url,
-                    "filename": uploaded_file.name
-                })
-                st.session_state.image_urls.append(image_url)
-                st.sidebar.success(f"{len(uploaded_files)} files uploaded successfully.")
-            except Exception as e:
-                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
-
-
-
-    # ✅ DISPLAY & DELETE FILES (PER YEAR GROUP)
-    st.sidebar.header(f"Manage Uploaded Images for {year_group}")
-
-    try:
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
-
-        image_docs = [doc for doc in docs]
-
-        if not image_docs:
-            st.sidebar.warning(f"⚠️ No images found for {year_group}. Upload images to start comparisons.")
-        else:
-            for doc in image_docs:
-                data = doc.to_dict()
-                st.sidebar.image(data["image_url"], width=100, caption=data["filename"])
-                if school_name == "adminkbrown":
-                    if st.sidebar.button(f"🗑 Delete {data['filename']}", key=f"delete_{doc.id}_{data['filename']}"):
-                        try:
-                            blob = bucket.blob(f"{school_name}/{year_group}/{data['filename']}")
-                            blob.delete()
-                            db.collection("writing_samples").document(doc.id).delete()
-                            st.sidebar.success(f"Deleted {data['filename']}")
-                            st.rerun()
-                        except Exception as e:
-                            st.sidebar.error(f"❌ Deletion Failed: {str(e)}")
-
-    except Exception as e:
-        st.sidebar.error(f"❌ Firestore Query Failed: {str(e)}")
-
-
-# === DISPLAY VOTING IMAGES ABOVE RANKINGS === #
-# ✅ Fetch images for the selected year group only
-image_urls = []
-try:
-    docs = db.collection("writing_samples")\
-             .where("school", "==", school_name)\
-             .where("year_group", "==", st.session_state.year_group)\
-             .stream()
-
-    for doc in docs:
-        data = doc.to_dict()
-        if "image_url" in data:
-            image_urls.append(data["image_url"])
-
-except Exception as e:
-    st.error(f"❌ Firestore Query Failed: {str(e)}")
-
-# ✅ Ensure image_urls is in session state
-if "image_urls" not in st.session_state:
-    st.session_state.image_urls = image_urls
-elif not st.session_state.image_urls:
-    st.session_state.image_urls = image_urls  # ✅ Assign only if empty
-
-# ✅ Prevent error if no images exist for the selected year group
-if not st.session_state.image_urls:
-    st.warning("⚠️ No images found for the selected year group. Upload images to start comparisons.")
-    st.stop()
-
-# ✅ Ensure new images are presented for voting
-if len(st.session_state.image_urls) >= 2:
-    st.subheader(f"Compare the Writing Samples for {year_group}")
-
-    # ✅ Preserve existing counts instead of resetting
-    if "image_comparison_counts" not in st.session_state or not isinstance(st.session_state.image_comparison_counts, dict):
-        st.session_state.image_comparison_counts = {}
-
-    # ✅ Ensure all images have a count (without resetting existing values)
-    for img in st.session_state.image_urls:
-        st.session_state.image_comparison_counts.setdefault(img, 0)
-
-    # ✅ Debugging output (only when `debug_mode` is enabled)
-    if st.session_state.get("debug_mode", False):
-        st.write("DEBUG: Image URLs:", st.session_state.image_urls)
-        st.write("DEBUG: Image Comparison Counts:", st.session_state.image_comparison_counts)
-
-    # ✅ Generate all possible pairs
+    # ✅ Adaptive fair pairing with blind ranking
     all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
+    random.shuffle(all_pairs)
+    
+    # ✅ Prioritize images with fewer comparisons
+    all_pairs.sort(key=lambda pair: (
+        st.session_state.image_comparison_counts.get(pair[0], 0) +
+        st.session_state.image_comparison_counts.get(pair[1], 0)
+    ))
+    
+    st.session_state.pairings = all_pairs  # Store shuffled prioritized pairs
 
-    # ✅ Sort pairs by least compared images first (ensuring fairness)
-    st.session_state.pairings = sorted(
-        all_pairs, key=lambda pair: st.session_state.image_comparison_counts.get(pair[0], 0) +
-                                    st.session_state.image_comparison_counts.get(pair[1], 0)
-    )
-
-
-    # ✅ Process only the next available pair
-if st.session_state.pairings:
-    img1, img2 = st.session_state.pairings.pop(0)  # ✅ Take only one pair
-
-    # ✅ Update tracking count immediately
-    st.session_state.image_comparison_counts[img1] += 1
-    st.session_state.image_comparison_counts[img2] += 1
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.image(img1, use_container_width=True)
-        if st.button(f"Select this image", key=f"vote_{img1}_{img2}"):
+    # ✅ Process one pair at a time using click-to-select
+    if st.session_state.pairings:
+        img1, img2 = st.session_state.pairings.pop(0)
+        
+        col1, col2 = st.columns(2)
+        
+        if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
             store_vote(img1, img2, school_name, year_group)
             st.rerun()
-
-    with col2:
-        st.image(img2, use_container_width=True)
-        if st.button(f"Select this image", key=f"vote_{img2}_{img1}"):
+        
+        if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
             store_vote(img2, img1, school_name, year_group)
             st.rerun()
+
 
 
     try:
