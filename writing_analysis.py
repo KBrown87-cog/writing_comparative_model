@@ -229,8 +229,11 @@ uploaded_files = st.sidebar.file_uploader(
     "Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group
 )
 
-# ✅ Ensure grade_labels dictionary exists
-grade_labels = {}
+# ✅ Ensure year_group is formatted correctly before using it in storage paths
+if not st.session_state.year_group.startswith("Year "):
+    st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+
+year_group = st.session_state.year_group  # ✅ Use correctly formatted year_group
 
 if uploaded_files:
     with st.sidebar.form("upload_form"):
@@ -249,7 +252,7 @@ if uploaded_files:
 
             try:
                 filename = f"{school_name}_{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
-                firebase_path = f"writing_samples/{school_name}/{year_group}/{grade_label}/{filename}"
+                firebase_path = f"writing_samples/{school_name}/{year_group}/{grade_label}/{filename}"  # ✅ Corrected path
 
                 blob = bucket.blob(firebase_path)
                 blob.upload_from_file(uploaded_file, content_type="image/jpeg")
@@ -258,7 +261,7 @@ if uploaded_files:
                 
                 db.collection("writing_samples").add({
                     "school": school_name,
-                    "year_group": year_group,
+                    "year_group": year_group,  # ✅ Ensures consistency in Firestore
                     "image_url": image_url,
                     "filename": filename,
                     "grade_label": grade_label
