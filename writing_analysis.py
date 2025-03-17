@@ -10,12 +10,18 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
-# 🔹 Firebase Initialization (Ensure it's initialized)
+# ✅ Use the correct file path
+FIREBASE_CREDENTIALS_PATH = "/mnt/data/writing-comparison-firebase-adminsdk-fbsvc-204fe8b59b.json"
+
+# ✅ Prevent multiple Firebase initializations
 if not firebase_admin._apps:
-    cred = credentials.Certificate("path/to/firebase_credentials.json")  # Update with actual path
-    firebase_admin.initialize_app(cred, {
-        "storageBucket": "your-project-id.appspot.com"  # Replace with your Firebase Storage bucket
-    })
+    cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+    firebase_admin.initialize_app(cred, {"storageBucket": "writing-comparison.firebasestorage.app"})
+
+# ✅ Initialize Firestore and Storage Client
+db = firestore.client()
+bucket = storage.bucket()
+
 
 # ✅ Define fetch_all_comparisons
 def fetch_all_comparisons(school_name, year_group):
