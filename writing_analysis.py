@@ -96,11 +96,63 @@ if st.session_state.logged_in:
                  .where(filter=firestore.FieldFilter("school", "==", school_name))\
                  .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
                  .stream()
-        st.session_state.image_urls = [doc.to_dict().get("image_url", "") for doc in docs if "image_url" in doc.to_dict()]
-        st.session_state.image_comparison_counts = {img: 0 for img in st.session_state.image_urls}
+        for doc in docs:
+            data = doc.to_dict()
+            if "image_url" in data and "grade_label" in data:
+                st.session_state.image_urls.append((data["image_url"], data["grade_label"]))
+                st.session_state.image_comparison_counts[data["image_url"]] = 0
 
-    # ✅ Adaptive fair pairing with blind ranking
-    all_pairs = list(itertools.combinations(st.session_state.image_urls, 2))
+    # ✅ Upload section
+    st.sidebar.header("Upload Writing Samples")
+    uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
+
+    grade_labels = {}
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            grade_labels[uploaded_file.name] = st.sidebar.selectbox(
+                f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
+            )
+
+        if st.sidebar.button("Confirm Upload"):
+            for uploaded_file in uploaded_files:
+                grade_label = grade_labels[uploaded_file.name]
+
+                try:
+                    # ✅ Store the image using structured naming
+                    filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
+                    firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
+
+                    blob = bucket.blob(firebase_path)
+                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+
+                    # ✅ Store metadata in Firestore
+                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
+                    db.collection("writing_samples").add({
+                        "school": school_name,
+                        "year_group": year_group,
+                        "image_url": image_url,
+                        "filename": filename,
+                        "grade_label": grade_label
+                    })
+
+                    st.session_state.image_urls.append((image_url, grade_label))
+                    st.session_state.image_comparison_counts[image_url] = 0
+                    st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+
+                except Exception as e:
+                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+
+    # ✅ Fair Sample Distribution Across GDS, EXS, and WTS
+    sample_pool = {"GDS": [], "EXS": [], "WTS": []}
+    for img_url, grade in st.session_state.image_urls:
+        sample_pool[grade].append(img_url)
+
+    all_pairs = []
+    for grade, images in sample_pool.items():
+        random.shuffle(images)
+        for pair in itertools.combinations(images, 2):
+            all_pairs.append((pair[0], pair[1], grade))
+
     random.shuffle(all_pairs)
     
     # ✅ Prioritize images with fewer comparisons
@@ -113,7 +165,7 @@ if st.session_state.logged_in:
 
     # ✅ Process one pair at a time using click-to-select
     if st.session_state.pairings:
-        img1, img2 = st.session_state.pairings.pop(0)
+        img1, img2, _ = st.session_state.pairings.pop(0)
         
         col1, col2 = st.columns(2)
         
@@ -125,9 +177,8 @@ if st.session_state.logged_in:
             store_vote(img2, img1, school_name, year_group)
             st.rerun()
 
-
     try:
-        db.collection("comparisons").add({  # ✅ Now properly indented
+        db.collection("comparisons").add({
             "school": school_name,
             "year_group": year_group,
             "image_1": img1,
@@ -136,7 +187,6 @@ if st.session_state.logged_in:
         })
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
-
 
 
       
