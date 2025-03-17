@@ -23,6 +23,7 @@ db = firestore.client()
 bucket = storage.bucket()
 
 
+
 # ✅ Define fetch_all_comparisons
 def fetch_all_comparisons(school_name, year_group):
     """Fetches all writing comparisons for a given school and year group from Firestore."""
