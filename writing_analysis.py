@@ -16,7 +16,7 @@ def fetch_all_comparisons(school_name, year_group):
     db = firestore.client()
     comparisons_ref = db.collection("comparisons")\
                         .where("school", "==", school_name)\
-                        .where(filter=firestore.FieldFilter("year_group", "==", year_group))
+                        .where(filter=firestore.FieldFilter("field", "==", value))
                         .stream()
     
     return [doc.to_dict() for doc in comparisons_ref]
@@ -301,7 +301,7 @@ if not firebase_admin._apps:
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
     docs = db.collection("writing_samples")\
-             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))
              .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
              .stream()
 else:
