@@ -86,86 +86,14 @@ else:
             st.session_state.pop(key, None)
         st.rerun()
 
-# === AFTER LOGIN === #
-if st.session_state.logged_in:
-    school_name = st.session_state.school_name
-    st.sidebar.header("Select Year Group")
-    year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
-
-    if year_group != st.session_state.year_group:
-        st.session_state.year_group = year_group
-        st.session_state.image_urls = []
-        st.session_state.image_comparison_counts = {}
-        docs = db.collection("writing_samples")\
-                 .where("school", "==", school_name)\
-                 .where("year_group", "==", year_group)\
-                 .stream()
-
-        image_pool = {"GDS": [], "EXS": [], "WTS": []}
-        st.session_state.image_urls = []
-
-        for doc in docs:
-            data = doc.to_dict()
-            if "image_url" in data and "grade_label" in data:
-                image_pool[data["grade_label"]].append(data["image_url"])
-                st.session_state.image_urls.append(data["image_url"])
-                st.session_state.image_comparison_counts[data["image_url"]] = 0
-
-    # ✅ Prevent errors if no images found
-    if not any(image_pool.values()):
-        st.warning("⚠️ No images available for comparison. Upload images first.")
-        st.stop()
-
-    # ✅ Ensure fair sample distribution across GDS, EXS, WTS
-    sample_pool = {"GDS": [], "EXS": [], "WTS": []}
-
-    for img_url in st.session_state.image_urls:
-        for grade, images in image_pool.items():
-            if img_url in images:
-                sample_pool[grade].append(img_url)
-
-    # ✅ Generate pairs from mixed ability levels
-all_pairs = []
-for grade, images in sample_pool.items():
-    random.shuffle(images)
-    for pair in itertools.combinations(images, 2):
-        all_pairs.append((pair[0], pair[1], grade))
-
-random.shuffle(all_pairs)
-
-# ✅ Prioritize images with fewer comparisons
-all_pairs.sort(key=lambda pair: (
-    st.session_state.image_comparison_counts.get(pair[0], 0) +
-    st.session_state.image_comparison_counts.get(pair[1], 0)
-))
-
-# ✅ Ensure `num_pairs` doesn't exceed available pairs
-num_pairs = min(40, len(all_pairs))  # ✅ Adjust number of pairs if needed
-st.session_state.pairings = all_pairs[:num_pairs]  # ✅ Prevents `random.sample()` errors
-
-# ✅ Process one pair at a time using click-to-select
-if st.session_state.pairings:
-    img1, img2, _ = st.session_state.pairings.pop(0)
-
-    col1, col2 = st.columns(2)
-
-    if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
-        store_comparison(img1, img2, school_name, year_group)
-        st.rerun()
-
-    if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
-        store_comparison(img2, img1, school_name, year_group)
-        st.rerun()
-
-
-# ✅ Define function to store user comparison
+# ✅ Define function to store user comparison (Moved to Global Scope)
 def store_comparison(img1, img2, school_name, year_group):
     """Stores the user's comparison selection in Firestore."""
     try:
         # ✅ Ensure last selected image exists before assigning winner
         if "last_selected" not in st.session_state:
             st.error("❌ No selection recorded. Please select an image first.")
-            return  # ✅ Now correctly inside a function
+            return  
 
         # ✅ Determine winner based on user selection
         winner = img1 if st.session_state.last_selected == img1 else img2
@@ -179,16 +107,16 @@ def store_comparison(img1, img2, school_name, year_group):
             "year_group": year_group,
             "image_1": img1,
             "image_2": img2,
-            "winner": winner,  # ✅ Track which image was selected
+            "winner": winner,  
             "timestamp": firestore.SERVER_TIMESTAMP,
-            "comparison_count": firestore.Increment(1)  # ✅ Track number of comparisons
-        }, merge=True)  # ✅ Prevents duplicate entries
+            "comparison_count": firestore.Increment(1)  
+        }, merge=True)  
 
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
 
 
-      
+# ✅ Define function to store user ranking data (Moved to Global Scope)
 def store_vote(selected_image, other_image, school_name, year_group):
     """Stores votes and updates ranking scores in Firestore using Firestore Transactions."""
 
@@ -223,11 +151,11 @@ def store_vote(selected_image, other_image, school_name, year_group):
             other_comparisons = other_data.get("comparison_count", 0)
 
             # ✅ Apply Bradley-Terry Model Update
-            K = 1.0  # ✅ Scaling Factor
-            expected_score = 1 / (1 + np.exp(other_score - selected_score))  # Expected probability
+            K = 1.0  
+            expected_score = 1 / (1 + np.exp(other_score - selected_score))  
 
-            selected_score += K * (1 - expected_score)  # ✅ Adjust for winner
-            other_score -= K * expected_score  # ✅ Adjust for loser
+            selected_score += K * (1 - expected_score)  
+            other_score -= K * expected_score  
 
             # ✅ Track number of times each image has been compared
             selected_votes += 1
@@ -259,6 +187,50 @@ def store_vote(selected_image, other_image, school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to update image scores: {str(e)}")
 
+
+# === AFTER LOGIN === #
+if st.session_state.logged_in:
+    school_name = st.session_state.school_name
+    st.sidebar.header("Select Year Group")
+    year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
+
+    if year_group != st.session_state.year_group:
+        st.session_state.year_group = year_group
+        st.session_state.image_urls = []
+        st.session_state.image_comparison_counts = {}
+
+        # ✅ Initialize image pool at the correct location
+        image_pool = {"GDS": [], "EXS": [], "WTS": []}
+
+        docs = db.collection("writing_samples")\
+                 .where("school", "==", school_name)\
+                 .where("year_group", "==", year_group)\
+                 .stream()
+
+        st.session_state.image_urls = []
+
+        for doc in docs:
+            data = doc.to_dict()
+            if "image_url" in data and "grade_label" in data:
+                image_pool[data["grade_label"]].append(data["image_url"])
+                st.session_state.image_urls.append(data["image_url"])
+                st.session_state.image_comparison_counts[data["image_url"]] = 0
+
+    # ✅ Process one pair at a time using click-to-select
+    if st.session_state.pairings:
+        img1, img2, _ = st.session_state.pairings.pop(0)
+
+        col1, col2 = st.columns(2)
+
+        col1.image(img1, use_container_width=True)
+        if col1.button("Select", key=f"vote_{img1}_{img2}"):
+            store_comparison(img1, img2, school_name, year_group)
+            st.rerun()
+
+        col2.image(img2, use_container_width=True)
+        if col2.button("Select", key=f"vote_{img2}_{img1}"):
+            store_comparison(img2, img1, school_name, year_group)
+            st.rerun()
 
 
 # ✅ Fetch all stored comparisons from Firestore
