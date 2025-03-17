@@ -277,9 +277,12 @@ if uploaded_files:
         # ✅ Debugging: Ensure uploaded images are stored in session state
         st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
-# ✅ Ensure year_group exists before querying Firestore
+# ✅ Ensure year_group is formatted correctly before querying Firestore
 if "year_group" in st.session_state and st.session_state.year_group:
-    year_group = f"Year {st.session_state.year_group}".strip()
+    if not st.session_state.year_group.startswith("Year "):  # ✅ Prevent multiple "Year" prefixes
+        st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
+
+    year_group = st.session_state.year_group  # ✅ Use correctly formatted year group
 
     docs = db.collection("writing_samples")\
              .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
@@ -391,10 +394,14 @@ if st.session_state.pairings:
 def fetch_all_comparisons(school_name, year_group):
     """Retrieves all stored comparisons from Firestore for the selected year group, ordered by most recent."""
     try:
+        # ✅ Ensure year_group is formatted correctly before querying
+        if not year_group.startswith("Year "):
+            year_group = f"Year {year_group}".strip()
+
         docs = (
             db.collection("comparisons")
             .where("school", "==", school_name)
-            .where("year_group", "==", year_group)  # ✅ Ensure only selected year group
+            .where("year_group", "==", year_group)  # ✅ Use correctly formatted year_group
             .order_by("timestamp", direction=firestore.Query.DESCENDING)  # ✅ Sort by most recent comparisons
             .limit(100)  # ✅ Prevent excessive reads (adjust as needed)
             .stream()
@@ -420,6 +427,7 @@ def fetch_all_comparisons(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
+
 
 
 
@@ -516,15 +524,18 @@ if stored_comparisons:
 else:
     st.warning("⚠️ No valid comparisons found for ranking. Make more comparisons first.")
 
-
 # ✅ Define function to fetch ranked images before calling it
 def fetch_ranked_images(school_name, year_group):
     """Fetches all ranked images from Firestore and sorts them by score."""
     try:
+        # ✅ Ensure year_group is formatted correctly before querying Firestore
+        if not year_group.startswith("Year "):
+            year_group = f"Year {year_group}".strip()
+
         docs = (
             db.collection("rankings")
             .where("school", "==", school_name)
-            .where("year_group", "==", year_group)
+            .where("year_group", "==", year_group)  # ✅ Use correctly formatted year_group
             .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort in Firestore query
             .stream()  # ✅ Now properly aligned
         )
