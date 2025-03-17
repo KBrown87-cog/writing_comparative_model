@@ -56,26 +56,33 @@ SCHOOL_CREDENTIALS = {
 # === SESSION STATE INITIALIZATION === #
 st.session_state.setdefault("debug_mode", False)  # ✅ Ensure debug mode is set
 st.session_state.setdefault("firebase_initialized", False)  # ✅ Prevent duplicate Firebase initialization
+st.session_state.setdefault("logged_in", False)
+st.session_state.setdefault("school_name", "")
+st.session_state.setdefault("year_group", "Year 1")  # ✅ Default to a properly formatted year group
+st.session_state.setdefault("image_urls", [])
+st.session_state.setdefault("pairings", [])
+st.session_state.setdefault("comparisons", [])
+st.session_state.setdefault("rankings", [])
+st.session_state.setdefault("image_comparison_counts", {})
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.school_name = ""
-    st.session_state.year_group = ""
-    st.session_state.image_urls = []
-    st.session_state.pairings = []
-    st.session_state.comparisons = []
-    st.session_state.rankings = []
-    st.session_state.image_comparison_counts = {}
+# ✅ Ensure year_group formatting is consistent
+if "year_group" in st.session_state and not st.session_state.year_group.startswith("Year "):
+    st.session_state.year_group = f"Year {st.session_state.year_group}".strip()
 
 # ✅ Ensure login form only appears if user is not logged in
 if not st.session_state.logged_in:
-    st.sidebar.header("Login")
-    school_name = st.sidebar.text_input("Enter School Name")
-    password = st.sidebar.text_input("Enter Password", type="password", help="Case-sensitive")
+    with st.sidebar:
+        st.header("Login")
+        school_name = st.text_input("Enter School Name", key="school_input").strip()
+        password = st.text_input("Enter Password", type="password", help="Case-sensitive", key="password_input")
 
-    if st.sidebar.button("Login"):
-        school_name = school_name.strip()
-        if school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
+        login_button = st.button("Login")
+
+    # ✅ Prevent blank submissions
+    if login_button:
+        if not school_name or not password:
+            st.sidebar.warning("Please enter both school name and password.")
+        elif school_name in SCHOOL_CREDENTIALS and hashlib.sha256(password.encode()).hexdigest() == SCHOOL_CREDENTIALS[school_name]:
             st.session_state.logged_in = True
             st.session_state.school_name = school_name
             st.sidebar.success(f"Logged in as {school_name}")
@@ -84,13 +91,17 @@ if not st.session_state.logged_in:
             st.sidebar.error("Invalid credentials. Please check your username and password.")
 
 else:
-    st.sidebar.header(f"Logged in as {st.session_state.school_name}")
-    if st.sidebar.button("Logout"):
+    with st.sidebar:
+        st.header(f"Logged in as {st.session_state.school_name}")
+        logout_button = st.button("Logout")
+
+    if logout_button:
         keys_to_clear = ["logged_in", "school_name", "year_group"]
         for key in keys_to_clear:
             st.session_state.pop(key, None)
         st.sidebar.info("You have been logged out.")  # ✅ Provide UI feedback
         st.rerun()
+
 
 
 # ✅ Define function to store user comparison (Moved to Global Scope)
@@ -202,7 +213,7 @@ if st.session_state.logged_in:
     year_group = st.sidebar.selectbox("Select Year Group", ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"])
 
     if year_group != st.session_state.year_group:
-        st.session_state.year_group = year_group
+        st.session_state.year_group = f"Year {year_group}".strip()
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
 
@@ -267,9 +278,13 @@ if uploaded_files:
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
     docs = db.collection("writing_samples")\
-             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
-             .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
-             .stream()
+             year_group = f"Year {st.session_state.year_group}".strip()
+
+docs = db.collection("writing_samples")\
+         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+         .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+         .stream()
+
 else:
     docs = []  # Prevents errors if no year group is selected
     st.warning("⚠️ Please select a year group first.")
