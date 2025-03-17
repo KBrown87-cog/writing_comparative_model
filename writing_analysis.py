@@ -380,25 +380,26 @@ if stored_comparisons:
 def fetch_ranked_images(school_name, year_group):
     """Fetches all ranked images from Firestore and sorts them by score."""
     try:
-    docs = (
-        db.collection("rankings")
-        .where("school", "==", school_name)
-        .where("year_group", "==", year_group)
-        .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort in Firestore query
-        .stream()  # ✅ Now properly aligned
-    )
+        docs = (
+            db.collection("rankings")
+            .where("school", "==", school_name)
+            .where("year_group", "==", year_group)
+            .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort in Firestore query
+            .stream()  # ✅ Now properly aligned
+        )
 
-    scores = []
-    for doc in docs:
-        data = doc.to_dict()
-        if data.get("year_group") == year_group:
-            scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
+        scores = []
+        for doc in docs:
+            data = doc.to_dict()
+            if data.get("year_group") == year_group:
+                scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
 
-    return scores  # ✅ Already sorted in Firestore, no need to re-sort in Python
+        return scores  # ✅ Already sorted in Firestore, no need to re-sort in Python
 
-except Exception as e:
-    st.error(f"❌ Failed to fetch ranked images: {str(e)}")
-    return []
+    except Exception as e:
+        st.error(f"❌ Failed to fetch ranked images: {str(e)}")
+        return []
+
 
 
 # ✅ Now call `fetch_ranked_images` at the correct location
