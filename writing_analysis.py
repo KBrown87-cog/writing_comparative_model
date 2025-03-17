@@ -13,10 +13,10 @@ import os
 # ✅ Fetch All Comparisons Function (Place this before Firebase initialization)
 def fetch_all_comparisons(school_name, year_group):
     """Fetches all writing comparisons for a given school and year group from Firestore."""
-    db = firestore.client()
+    
     comparisons_ref = db.collection("comparisons")\
-                        .where("school", "==", school_name)\
-                        .where(filter=firestore.FieldFilter("field", "==", value))
+                        .where(filter=firestore.FieldFilter("school", "==", school_name))\
+                        .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
                         .stream()
     
     return [doc.to_dict() for doc in comparisons_ref]
@@ -300,10 +300,14 @@ if not firebase_admin._apps:
 
 # ✅ Fetch images after upload to ensure availability
 if "year_group" in st.session_state and st.session_state.year_group:
-    docs = db.collection("writing_samples")\
-             .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))
-             .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
-             .stream()
+    if "school_name" in st.session_state and st.session_state.school_name:
+        docs = db.collection("writing_samples")\
+                 .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+                 .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+                 .stream()
+    else:
+        docs = []
+        st.warning("⚠️ Please select a school first.")
 else:
     docs = []
     st.warning("⚠️ Please select a year group first.")
@@ -514,27 +518,23 @@ def fetch_ranked_images(school_name, year_group):
             clean_year_group = year_group.replace("Year ", "").strip()
             year_group = f"Year {clean_year_group}"
 
-
+        # ✅ Fetch documents from Firestore
         docs = db.collection("writing_samples")\
-         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
-         .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
-         .stream()
-        
-        )
+                 .where(filter=firestore.FieldFilter("school", "==", school_name))\
+                 .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+                 .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Ensure sorting by score
+                 .stream()
 
         scores = []
         for doc in docs:
             data = doc.to_dict()
-            if data.get("year_group") == year_group:
-                scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
+            scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
 
-        return scores  # ✅ Already sorted in Firestore, no need to re-sort in Python
+        return scores  # ✅ Sorted by score
 
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
-
-
 
 # ✅ Now call `fetch_ranked_images` at the correct location
 ranked_images = fetch_ranked_images(school_name, year_group)
