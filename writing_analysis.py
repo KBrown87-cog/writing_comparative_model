@@ -332,21 +332,28 @@ while len(all_pairs) < 40:
     selected_grade = random.choices(list(sample_pool.keys()), weights=[len(sample_pool[g]) for g in sample_pool])[0]
     images = sample_pool[selected_grade]
 
-    if len(images) > 1:
-        pair = random.sample(images, 2)  # ✅ Pair within the same category
-    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # ✅ Pair GDS and WTS
-    elif len(sample_pool["GDS"]) > 0 and len(sample_pool["EXS"]) > 0:
-        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # ✅ Pair GDS and EXS
-    elif len(sample_pool["EXS"]) > 0 and len(sample_pool["WTS"]) > 0:
-        pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # ✅ Pair EXS and WTS
-    else:
-        # ✅ Final Fallback: Select any available pair from different categories
-        all_images = [img for g in sample_pool.values() for img in g]
-        if len(all_images) > 1:
-            pair = random.sample(all_images, 2)
+    # ✅ Ensure cross-category pairings
+    if selected_grade == "GDS":
+        if len(sample_pool["EXS"]) > 0:
+            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["EXS"]))  # GDS vs EXS
+        elif len(sample_pool["WTS"]) > 0:
+            pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))  # GDS vs WTS
         else:
-            continue  # Skip if no valid pairing is found
+            pair = random.sample(sample_pool["GDS"], 2)  # Fallback: GDS vs GDS
+    elif selected_grade == "EXS":
+        if len(sample_pool["GDS"]) > 0:
+            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["GDS"]))  # EXS vs GDS
+        elif len(sample_pool["WTS"]) > 0:
+            pair = (random.choice(sample_pool["EXS"]), random.choice(sample_pool["WTS"]))  # EXS vs WTS
+        else:
+            pair = random.sample(sample_pool["EXS"], 2)  # Fallback: EXS vs EXS
+    elif selected_grade == "WTS":
+        if len(sample_pool["EXS"]) > 0:
+            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["EXS"]))  # WTS vs EXS
+        elif len(sample_pool["GDS"]) > 0:
+            pair = (random.choice(sample_pool["WTS"]), random.choice(sample_pool["GDS"]))  # WTS vs GDS
+        else:
+            pair = random.sample(sample_pool["WTS"], 2)  # Fallback: WTS vs WTS
 
     st.write("DEBUG: Pairing Attempt", selected_grade, "Pair:", pair)
 
@@ -359,6 +366,7 @@ while len(all_pairs) < 40:
 
 random.shuffle(all_pairs)
 st.write("DEBUG: Generated Pairs Before Sorting", all_pairs)
+
 
 
 # ✅ Prioritize images with fewer comparisons while balancing categories
