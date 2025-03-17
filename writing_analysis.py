@@ -247,24 +247,29 @@ def store_vote(selected_image, other_image, school_name, year_group):
 
 # ✅ Fetch all stored comparisons from Firestore
 def fetch_all_comparisons(school_name, year_group):
-    """Retrieves all stored comparisons from Firestore for the selected year group."""
+    """Retrieves all stored comparisons from Firestore for the selected year group, ordered by most recent."""
     try:
         docs = (
             db.collection("comparisons")
             .where("school", "==", school_name)
             .where("year_group", "==", year_group)  # ✅ Ensure only selected year group
-            .stream()  # ✅ Fix: Correct indentation and remove unnecessary backslash
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)  # ✅ Sort by most recent comparisons
+            .limit(100)  # ✅ Prevent excessive reads (adjust as needed)
+            .stream()
         )
 
         comparisons = []
         for doc in docs:
             data = doc.to_dict()
+
             img1 = data.get("image_1")
             img2 = data.get("image_2")
-            winner = data.get("winner", img1)  # ✅ Default to img1 if no explicit winner stored
+            winner = data.get("winner", img1)  # ✅ Default to img1 if winner is missing
+            comparison_count = data.get("comparison_count", 0)  # ✅ Track how many times this pair was compared
 
+            # ✅ Ensure data integrity before adding to the list
             if img1 and img2:
-                comparisons.append((img1, img2, winner))  # ✅ Store proper format
+                comparisons.append((img1, img2, winner, comparison_count))
 
         if not comparisons:
             st.info("ℹ️ No comparisons found for the selected year group yet. Start making comparisons!")
@@ -273,6 +278,7 @@ def fetch_all_comparisons(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch comparison data: {str(e)}")
         return []
+
 
 
 
