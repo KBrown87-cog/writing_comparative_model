@@ -519,11 +519,13 @@ def fetch_ranked_images(school_name, year_group):
             year_group = f"Year {clean_year_group}"
 
         # ✅ Fetch documents from Firestore
-        docs = db.collection("writing_samples")\
-                 .where(filter=firestore.FieldFilter("school", "==", school_name))\
-                 .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
-                 .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Ensure sorting by score
-                 .stream()
+        docs = (
+            db.collection("writing_samples")
+              .where(filter=firestore.FieldFilter("school", "==", school_name))
+              .where(filter=firestore.FieldFilter("year_group", "==", year_group))
+              .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Ensure sorting by score
+              .stream()
+        )
 
         scores = []
         for doc in docs:
@@ -535,6 +537,7 @@ def fetch_ranked_images(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
+
 
 # ✅ Now call `fetch_ranked_images` at the correct location
 ranked_images = fetch_ranked_images(school_name, year_group)
