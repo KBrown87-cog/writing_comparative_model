@@ -157,9 +157,15 @@ if st.session_state.logged_in:
             st.rerun()
 
     try:
+    # ✅ Ensure last selected image exists before assigning winner
+    if "last_selected" not in st.session_state:
+        st.error("❌ No selection recorded. Please select an image first.")
+        return
+
     # ✅ Determine winner based on user selection
     winner = img1 if st.session_state.last_selected == img1 else img2
 
+    # ✅ Store comparison in Firestore
     db.collection("comparisons").add({
         "school": school_name,
         "year_group": year_group,
@@ -171,6 +177,7 @@ if st.session_state.logged_in:
     }, merge=True)  # ✅ Prevents duplicate entries
 except Exception as e:
     st.error(f"❌ Failed to store comparison: {str(e)}")
+
 
       
 def store_vote(selected_image, other_image, school_name, year_group):
