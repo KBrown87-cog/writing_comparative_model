@@ -107,75 +107,85 @@ if st.session_state.logged_in:
     uploaded_files = st.sidebar.file_uploader("Upload Writing Samples", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key=year_group)
 
     grade_labels = {}
-    if uploaded_files:
+    # ✅ AFTER Uploading and Storing Images
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        grade_labels[uploaded_file.name] = st.sidebar.selectbox(
+            f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
+        )
+
+    if st.sidebar.button("Confirm Upload"):
         for uploaded_file in uploaded_files:
-            grade_labels[uploaded_file.name] = st.sidebar.selectbox(
-                f"Label for {uploaded_file.name}", ["GDS", "EXS", "WTS"]
-            )
+            grade_label = grade_labels[uploaded_file.name]
 
-        if st.sidebar.button("Confirm Upload"):
-            for uploaded_file in uploaded_files:
-                grade_label = grade_labels[uploaded_file.name]
+            try:
+                filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
+                firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
 
-                try:
-                    # ✅ Store the image using structured naming
-                    filename = f"{school_name}_Year{year_group}_{grade_label}_{hashlib.sha256(uploaded_file.name.encode()).hexdigest()[:10]}.jpg"
-                    firebase_path = f"writing_samples/{school_name}/Year{year_group}/{grade_label}/{filename}"
+                blob = bucket.blob(firebase_path)
+                blob.upload_from_file(uploaded_file, content_type="image/jpeg")
 
-                    blob = bucket.blob(firebase_path)
-                    blob.upload_from_file(uploaded_file, content_type="image/jpeg")
+                image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
+                db.collection("writing_samples").add({
+                    "school": school_name,
+                    "year_group": year_group,
+                    "image_url": image_url,
+                    "filename": filename,
+                    "grade_label": grade_label
+                })
 
-                    # ✅ Store metadata in Firestore
-                    image_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{firebase_path.replace('/', '%2F')}?alt=media"
-                    db.collection("writing_samples").add({
-                        "school": school_name,
-                        "year_group": year_group,
-                        "image_url": image_url,
-                        "filename": filename,
-                        "grade_label": grade_label
-                    })
+                st.session_state.image_urls.append((image_url, grade_label))
+                st.session_state.image_comparison_counts[image_url] = 0
+                st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
 
-                    st.session_state.image_urls.append((image_url, grade_label))
-                    st.session_state.image_comparison_counts[image_url] = 0
-                    st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
+            except Exception as e:
+                st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
-                except Exception as e:
-                    st.sidebar.error(f"❌ Upload Failed: {str(e)}")
+# ✅ FETCH & PROCESS IMAGES FOR FAIR PAIRING (Add Here)
+docs = db.collection("writing_samples")\
+         .where("school", "==", school_name)\
+         .where("year_group", "==", year_group)\
+         .stream()
 
-    # ✅ Fair Sample Distribution Across GDS, EXS, and WTS
-    sample_pool = {"GDS": [], "EXS": [], "WTS": []}
-    for img_url, grade in st.session_state.image_urls:
-        sample_pool[grade].append(img_url)
+image_pool = {"GDS": [], "EXS": [], "WTS": []}
 
-    all_pairs = []
-    for grade, images in sample_pool.items():
-        random.shuffle(images)
-        for pair in itertools.combinations(images, 2):
-            all_pairs.append((pair[0], pair[1], grade))
+for doc in docs:
+    data = doc.to_dict()
+    if "image_url" in data and "grade_label" in data:
+        image_pool[data["grade_label"]].append(data["image_url"])
 
-    random.shuffle(all_pairs)
-    
-    # ✅ Prioritize images with fewer comparisons
-    all_pairs.sort(key=lambda pair: (
-        st.session_state.image_comparison_counts.get(pair[0], 0) +
-        st.session_state.image_comparison_counts.get(pair[1], 0)
-    ))
-    
-    st.session_state.pairings = all_pairs  # Store shuffled prioritized pairs
+# ✅ Ensure fair sample distribution across GDS, EXS, WTS
+sample_pool = {"GDS": [], "EXS": [], "WTS": []}
 
-    # ✅ Process one pair at a time using click-to-select
-    if st.session_state.pairings:
-        img1, img2, _ = st.session_state.pairings.pop(0)
-        
-        col1, col2 = st.columns(2)
-        
-        if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
-            store_vote(img1, img2, school_name, year_group)
-            st.rerun()
-        
-        if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
-            store_vote(img2, img1, school_name, year_group)
-            st.rerun()
+for img_url, grade in zip(st.session_state.image_urls, st.session_state.image_comparison_counts.keys()):
+    sample_pool[grade].append(img_url)
+
+# ✅ Generate pairs from mixed ability levels
+all_pairs = []
+for grade, images in sample_pool.items():
+    random.shuffle(images)
+    for pair in itertools.combinations(images, 2):
+        all_pairs.append((pair[0], pair[1], grade))
+
+random.shuffle(all_pairs)
+
+# ✅ Store the generated pairs for fair comparison
+st.session_state.pairings = all_pairs[:20]  # Assign only a fair subset per user session
+
+# ✅ Process one pair at a time using click-to-select
+if st.session_state.pairings:
+    img1, img2, _ = st.session_state.pairings.pop(0)
+
+    col1, col2 = st.columns(2)
+
+    if col1.image(img1, use_container_width=True) and col1.button("Select", key=f"vote_{img1}_{img2}"):
+        store_vote(img1, img2, school_name, year_group)
+        st.rerun()
+
+    if col2.image(img2, use_container_width=True) and col2.button("Select", key=f"vote_{img2}_{img1}"):
+        store_vote(img2, img1, school_name, year_group)
+        st.rerun()
+
 
     try:
         db.collection("comparisons").add({
