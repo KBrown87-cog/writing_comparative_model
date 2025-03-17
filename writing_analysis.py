@@ -211,29 +211,28 @@ if len(st.session_state.image_urls) >= 2:
     )
 
 
-    # ✅ Process each pair one by one
+    # ✅ Process only the next available pair
 if st.session_state.pairings:
-    img1, img2 = st.session_state.pairings.pop(0)
+    img1, img2 = st.session_state.pairings.pop(0)  # ✅ Take only one pair
 
     # ✅ Update tracking count immediately
     st.session_state.image_comparison_counts[img1] += 1
     st.session_state.image_comparison_counts[img2] += 1
 
-    # ✅ Loop through each remaining pair and display buttons correctly
-    for index, (img1, img2) in enumerate(st.session_state.pairings):  # ✅ Correct indentation
-        col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-        with col1:
-            st.image(img1, use_container_width=True)
-            if st.button(f"Select this image", key=f"vote_{index}_{img1}_{img2}"):
-                store_vote(img1, img2, school_name, year_group)
-                st.rerun()
+    with col1:
+        st.image(img1, use_container_width=True)
+        if st.button(f"Select this image", key=f"vote_{img1}_{img2}"):
+            store_vote(img1, img2, school_name, year_group)
+            st.rerun()
 
-        with col2:
-            st.image(img2, use_container_width=True)
-            if st.button(f"Select this image", key=f"vote_{index}_{img2}_{img1}"):
-                store_vote(img2, img1, school_name, year_group)
-                st.rerun()
+    with col2:
+        st.image(img2, use_container_width=True)
+        if st.button(f"Select this image", key=f"vote_{img2}_{img1}"):
+            store_vote(img2, img1, school_name, year_group)
+            st.rerun()
+
 
     try:
         db.collection("comparisons").add({  # ✅ Now properly indented
