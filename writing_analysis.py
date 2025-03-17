@@ -281,13 +281,37 @@ for img_url in st.session_state.image_urls:
         if img_url in images:
             sample_pool[grade].append(img_url)
 
-# ✅ Generate pairs from mixed ability levels
+# ✅ Get real uploaded proportions
+total_images = sum(len(images) for images in sample_pool.values())
+if total_images == 0:
+    st.warning("⚠️ No valid images available for pairing. Upload images first.")
+    st.stop()
+
+proportions = {grade: len(images) / total_images for grade, images in sample_pool.items()}
+
+# ✅ Generate balanced pairs using adaptive distribution
 all_pairs = []
-for grade, images in sample_pool.items():
-    if len(images) > 1:  # ✅ Ensure there are enough images to create pairs
-        random.shuffle(images)
-        for pair in itertools.combinations(images, 2):
-            all_pairs.append((pair[0], pair[1], grade))
+pairing_attempts = {"GDS": 0, "EXS": 0, "WTS": 0}
+
+# ✅ Ensure mixed ability level pairings
+while len(all_pairs) < 40:  # ✅ Adjust number of pairs if needed
+    selected_grade = random.choices(list(proportions.keys()), weights=proportions.values())[0]
+    images = sample_pool[selected_grade]
+
+    # ✅ Ensure at least one cross-category pairing
+    if selected_grade == "EXS" and len(sample_pool["GDS"]) > 0 and len(sample_pool["WTS"]) > 0:
+        pair = (random.choice(sample_pool["GDS"]), random.choice(sample_pool["WTS"]))
+    elif len(images) > 1:
+        pair = random.sample(images, 2)
+    else:
+        continue  # ✅ Skip if no valid pairing
+
+    if pair not in all_pairs:  # ✅ Prevent duplicate pairs
+        all_pairs.append(pair)
+        pairing_attempts[selected_grade] += 1
+
+    if sum(pairing_attempts.values()) >= 40:
+        break  # ✅ Stop once enough pairs are generated
 
 random.shuffle(all_pairs)
 
@@ -298,16 +322,14 @@ if all_pairs:
         st.session_state.image_comparison_counts.get(pair[1], 0)
     ))
 
-    # ✅ Ensure `num_pairs` doesn't exceed available pairs
-    num_pairs = min(40, len(all_pairs))
-    st.session_state.pairings = all_pairs[:num_pairs]
-
+    # ✅ Store the selected pairs
+    st.session_state.pairings = all_pairs
 else:
     st.warning("⚠️ No valid image pairs found. Ensure enough images are uploaded for comparisons.")
 
 # ✅ Process one pair at a time using click-to-select
 if st.session_state.pairings:
-    img1, img2, _ = st.session_state.pairings.pop(0)
+    img1, img2 = st.session_state.pairings.pop(0)
 
     col1, col2 = st.columns(2)
 
@@ -320,6 +342,7 @@ if st.session_state.pairings:
     if col2.button("Select", key=f"vote_{img2}_{img1}"):
         store_comparison(img2, img1, school_name, year_group)
         st.rerun()
+
 
 # ✅ Fetch all stored comparisons from Firestore
 def fetch_all_comparisons(school_name, year_group):
