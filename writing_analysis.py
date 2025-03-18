@@ -570,30 +570,34 @@ def fetch_ranked_images(school_name, year_group):
             year_group = f"Year {clean_year_group}"
 
         # ✅ Fetch documents from Firestore (filter out missing scores)
-        docs = (
-            docs = (
-                db.collection("writing_samples")
-                  .where(filter=firestore.FieldFilter("school", "==", school_name))
-                  .where(filter=firestore.FieldFilter("year_group", "==", year_group))
-                  .where(filter=firestore.FieldFilter("score", ">=", 0))  # ✅ Ensure only scored images are retrieved
-                  .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort by score
-                  .stream()
-            )
-
+        docs = db.collection("writing_samples")\
+            .where(filter=firestore.FieldFilter("school", "==", school_name))\
+            .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+            .where(filter=firestore.FieldFilter("score", ">=", 0))\  # ✅ Ensure only scored images are retrieved
+            .order_by("score", direction=firestore.Query.DESCENDING)\
+            .stream()
 
         doc_list = list(docs)  # Convert generator to list
 
         # ✅ Debug: Check if docs are retrieved
-        st.write("DEBUG: Retrieved Ranked Documents", [doc.to_dict() for doc in doc_list])
-
         if not doc_list:
             st.warning("⚠️ No ranked images found. Make more comparisons first.")
             return []
+        
+        st.write("DEBUG: Retrieved Ranked Documents", [doc.to_dict() for doc in doc_list])
 
         scores = []
         for doc in doc_list:
             data = doc.to_dict()
-            scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
+            image_url = data.get("image_url")
+            score = data.get("score", 0)
+            comparison_count = data.get("comparison_count", 0)
+
+            # ✅ Validate and append only if image URL exists
+            if image_url:
+                scores.append((image_url, score, comparison_count))
+            else:
+                st.warning(f"⚠️ Document missing image_url: {data}")
 
         return scores  # ✅ Sorted by score
 
