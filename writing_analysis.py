@@ -152,17 +152,17 @@ if "pairings" in st.session_state and st.session_state.pairings:
             if st.button(f"Select Image 1 - {i}", key=f"btn1_{i}"):
                 store_comparison(img1, img2, st.session_state.school_name, st.session_state.year_group, img1)
                 st.success(f"✅ You selected Image 1")
+                st.rerun()  # 🔄 ✅ Force UI refresh to reflect the new comparison
 
         with col2:
             st.image(img2, caption="Writing Sample 2", use_column_width=True)
             if st.button(f"Select Image 2 - {i}", key=f"btn2_{i}"):
                 store_comparison(img1, img2, st.session_state.school_name, st.session_state.year_group, img2)
                 st.success(f"✅ You selected Image 2")
+                st.rerun()  # 🔄 ✅ Force UI refresh to reflect the new comparison
 
 else:
     st.warning("⚠️ No image pairs available. Ensure images are uploaded and paired first.")
-
-
 
 def store_comparison(img1, img2, school_name, year_group, winner):
     """Stores the user's comparison selection in Firestore and ensures data integrity."""
@@ -347,6 +347,18 @@ if st.session_state.logged_in:
             # ✅ Debugging: Ensure uploaded images are stored
             st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
+# ✅ Ensure `image_pool` is initialized before use
+image_pool = {"GDS": [], "EXS": [], "WTS": []}
+
+# ✅ Populate `image_pool` with retrieved images
+for doc in doc_list:
+    data = doc.to_dict()
+    if "image_url" in data and "grade_label" in data:
+        if data["grade_label"] in image_pool:
+            image_pool[data["grade_label"]].append(data["image_url"])
+        else:
+            st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
+
 # ✅ Ensure Firebase is initialized BEFORE fetching images
 if not firebase_admin._apps:
     st.error("❌ Firebase is not initialized. Please check your configuration.")
@@ -354,8 +366,8 @@ if not firebase_admin._apps:
 
 # ✅ Fetch images from Firestore
 docs = db.collection("writing_samples")\
-            .where(filter=firestore.FieldFilter("school", "==", school_name))\
-            .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
+            .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+            .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
             .stream()
 
 doc_list = list(docs)  # Convert generator to list
