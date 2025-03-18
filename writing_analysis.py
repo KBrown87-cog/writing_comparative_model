@@ -569,13 +569,15 @@ def fetch_ranked_images(school_name, year_group):
             clean_year_group = year_group.replace("Year ", "").strip()
             year_group = f"Year {clean_year_group}"
 
-        # ✅ Fetch documents from Firestore (filter out missing scores)
-        docs = db.collection("writing_samples")\
-            .where(filter=firestore.FieldFilter("school", "==", school_name))\
-            .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
-            .where(filter=firestore.FieldFilter("score", ">=", 0))\  # ✅ Ensure only scored images are retrieved
-            .order_by("score", direction=firestore.Query.DESCENDING)\
-            .stream()
+                # ✅ Fetch documents from Firestore (filter out missing scores)
+        docs = (
+            db.collection("writing_samples")
+              .where(filter=firestore.FieldFilter("school", "==", school_name))
+              .where(filter=firestore.FieldFilter("year_group", "==", year_group))
+              .where(filter=firestore.FieldFilter("score", ">=", 0))  # ✅ Ensure only scored images are retrieved
+              .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort by score
+              .stream()
+        )
 
         doc_list = list(docs)  # Convert generator to list
 
