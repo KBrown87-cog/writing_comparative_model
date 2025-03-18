@@ -61,9 +61,9 @@ def fetch_all_comparisons(school_name, year_group):
 # 🔹 Call the function where needed
 if "year_group" in st.session_state and st.session_state.year_group:
     docs = db.collection("writing_samples")\
-             .where("school", "==", st.session_state.school_name)\
-             .where("year_group", "==", st.session_state.year_group)\
-             .stream()
+         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+         .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+         .stream()
 else:
     docs = []
     st.warning("⚠️ Please select a year group first.")
@@ -380,9 +380,14 @@ st.write("DEBUG: Final Retrieved Images", st.session_state.image_urls)  # ✅ De
 
 # ✅ Display images properly before generating pairings
 if st.session_state.image_urls:
-    st.image(st.session_state.image_urls, caption="Uploaded Writing Samples", use_column_width=True)
+    st.image(
+        st.session_state.image_urls,
+        caption=["Uploaded Writing Samples"] * len(st.session_state.image_urls),
+        use_container_width=True
+    )
 else:
     st.warning("⚠️ No images available for this year group.")
+
 
 # ✅ Ensure fair sample distribution across GDS, EXS, and WTS
 sample_pool = {"GDS": [], "EXS": [], "WTS": []}
@@ -548,17 +553,27 @@ def fetch_ranked_images(school_name, year_group):
             clean_year_group = year_group.replace("Year ", "").strip()
             year_group = f"Year {clean_year_group}"
 
-        # ✅ Fetch documents from Firestore
+        # ✅ Fetch documents from Firestore (filter out missing scores)
         docs = (
             db.collection("writing_samples")
               .where(filter=firestore.FieldFilter("school", "==", school_name))
               .where(filter=firestore.FieldFilter("year_group", "==", year_group))
-              .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Ensure sorting by score
+              .where(filter=firestore.FieldFilter("score", ">=", 0))  # ✅ Ensure only scored images are retrieved
+              .order_by("score", direction=firestore.Query.DESCENDING)  # ✅ Sort by score
               .stream()
         )
 
+        doc_list = list(docs)  # Convert generator to list
+
+        # ✅ Debug: Check if docs are retrieved
+        st.write("DEBUG: Retrieved Ranked Documents", [doc.to_dict() for doc in doc_list])
+
+        if not doc_list:
+            st.warning("⚠️ No ranked images found. Make more comparisons first.")
+            return []
+
         scores = []
-        for doc in docs:
+        for doc in doc_list:
             data = doc.to_dict()
             scores.append((data["image_url"], data.get("score", 0), data.get("comparison_count", 0)))  # ✅ Include count
 
@@ -567,6 +582,7 @@ def fetch_ranked_images(school_name, year_group):
     except Exception as e:
         st.error(f"❌ Failed to fetch ranked images: {str(e)}")
         return []
+
 
 
 # ✅ Now call `fetch_ranked_images` at the correct location
