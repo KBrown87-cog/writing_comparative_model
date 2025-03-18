@@ -60,11 +60,14 @@ def fetch_all_comparisons(school_name, year_group):
 
 # 🔹 Call the function where needed
 if "year_group" in st.session_state and st.session_state.year_group:
-    docs = db.collection("writing_samples")\
-            .where(filter=firestore.FieldFilter("school", "==", school_name))\
-            .where(filter=firestore.FieldFilter("year_group", "==", year_group))\
-            .stream()
-
+    if "school_name" in st.session_state and st.session_state.school_name:
+        docs = db.collection("writing_samples")\
+                .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+                .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+                .stream()
+    else:
+        docs = []
+        st.warning("⚠️ Please log in and select a school first.")
 else:
     docs = []
     st.warning("⚠️ Please select a year group first.")
