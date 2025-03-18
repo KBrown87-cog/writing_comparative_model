@@ -10,21 +10,40 @@ from firebase_admin import credentials, firestore, storage
 import json
 import os
 
-import os
+# === STREAMLIT PAGE SETUP === #
+st.set_page_config(layout="wide")
+st.title("Comparative Judgement Writing Assessment")
 
-import os
-
-# ✅ Define the absolute path to the credentials file
-FIREBASE_CREDENTIALS_PATH = "/Users/kerriebrown/Documents/writing_comparative_model/writing-comparison-firebase-adminsdk-fbsvc-204fe8b59b.json"
-
-# ✅ Prevent multiple Firebase initializations
+# ✅ Initialize Firebase using `st.secrets`
 if not firebase_admin._apps:
+    firebase_config = {
+        "type": st.secrets["FIREBASE"]["TYPE"],
+        "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
+        "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
+        "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),
+        "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
+        "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
+        "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
+        "token_uri": st.secrets["FIREBASE"]["TOKEN_URI"],
+        "auth_provider_x509_cert_url": st.secrets["FIREBASE"]["AUTH_PROVIDER_X509_CERT_URL"],
+        "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
+    }
+
+    FIREBASE_CREDENTIALS_PATH = "/tmp/firebase_credentials.json"
+    with open(FIREBASE_CREDENTIALS_PATH, "w") as json_file:
+        json.dump(firebase_config, json_file)
+
+    # ✅ Initialize Firebase
     cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
     firebase_admin.initialize_app(cred, {"storageBucket": "writing-comparison.firebasestorage.app"})
 
 # ✅ Initialize Firestore and Storage Client
 db = firestore.client()
 bucket = storage.bucket()
+
+# ✅ Debugging: Check if Firebase is initialized
+if st.session_state.get("debug_mode", False):
+    st.write("DEBUG: Firebase initialized successfully")
 
 
 
@@ -41,51 +60,19 @@ def fetch_all_comparisons(school_name, year_group):
 
 # 🔹 Call the function where needed
 if "year_group" in st.session_state and st.session_state.year_group:
-    stored_comparisons = fetch_all_comparisons(st.session_state.school_name, st.session_state.year_group)
+    docs = db.collection("writing_samples")\
+             .where("school", "==", st.session_state.school_name)\
+             .where("year_group", "==", st.session_state.year_group)\
+             .stream()
 else:
-    stored_comparisons = []
+    docs = []
     st.warning("⚠️ Please select a year group first.")
-
 
 
 # ✅ Debug Mode Toggle (set to False for normal use, True for debugging)
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 
-# ✅ Prevent duplicate Firebase initialization
-if not firebase_admin._apps:
-    firebase_config = {
-        "type": st.secrets["FIREBASE"]["TYPE"],
-        "project_id": st.secrets["FIREBASE"]["PROJECT_ID"],
-        "private_key_id": st.secrets["FIREBASE"]["PRIVATE_KEY_ID"],
-        "private_key": st.secrets["FIREBASE"]["PRIVATE_KEY"].replace("\\n", "\n"),
-        "client_email": st.secrets["FIREBASE"]["CLIENT_EMAIL"],
-        "client_id": st.secrets["FIREBASE"]["CLIENT_ID"],
-        "auth_uri": st.secrets["FIREBASE"]["AUTH_URI"],
-        "token_uri": st.secrets["FIREBASE"]["TOKEN_URI"],
-        "auth_provider_x509_cert_url": st.secrets["FIREBASE"]["AUTH_PROVIDER_X509_CERT_URL"],
-        "client_x509_cert_url": st.secrets["FIREBASE"]["CLIENT_X509_CERT_URL"]
-    }
-
-    firebase_credentials_path = "/tmp/firebase_credentials.json"
-    with open(firebase_credentials_path, "w") as json_file:
-        json.dump(firebase_config, json_file)
-
-    # ✅ Initialize Firebase
-    cred = credentials.Certificate(firebase_credentials_path)
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': 'writing-comparison.firebasestorage.app'
-    })
-
-# ✅ Initialize Firestore and Storage Client
-db = firestore.client()
-bucket = storage.bucket()
-
-
-
-# === STREAMLIT PAGE SETUP === #
-st.set_page_config(layout="wide")
-st.title("Comparative Judgement Writing Assessment")
 
 # === SCHOOL LOGINS === #
 SCHOOL_CREDENTIALS = {
@@ -148,6 +135,29 @@ else:
         st.sidebar.info("You have been logged out.")  # ✅ Provide UI feedback
         st.rerun()
 
+# ✅ Display Comparisons for User Selection
+st.subheader("Choose the best writing sample from below:")
+
+if "pairings" in st.session_state and st.session_state.pairings:
+    for i, (img1, img2) in enumerate(st.session_state.pairings[:10]):  # Display first 10 pairs
+        st.write(f"### Comparison {i + 1}")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.image(img1, caption="Writing Sample 1", use_column_width=True)
+            if st.button(f"Select Image 1 - {i}", key=f"btn1_{i}"):
+                store_comparison(img1, img2, st.session_state.school_name, st.session_state.year_group, img1)
+                st.success(f"✅ You selected Image 1")
+
+        with col2:
+            st.image(img2, caption="Writing Sample 2", use_column_width=True)
+            if st.button(f"Select Image 2 - {i}", key=f"btn2_{i}"):
+                store_comparison(img1, img2, st.session_state.school_name, st.session_state.year_group, img2)
+                st.success(f"✅ You selected Image 2")
+
+else:
+    st.warning("⚠️ No image pairs available. Ensure images are uploaded and paired first.")
+
 
 
 def store_comparison(img1, img2, school_name, year_group, winner):
@@ -157,10 +167,12 @@ def store_comparison(img1, img2, school_name, year_group, winner):
         comparison_id = f"{school_name}_{year_group}_{hashlib.sha256((img1 + img2).encode()).hexdigest()[:20]}"
         comparison_ref = db.collection("comparisons").document(comparison_id)
 
-        # ✅ Check if the document exists
+        # ✅ Debug: Check if the document exists
         comparison_doc = comparison_ref.get()
+        st.write(f"DEBUG: Checking if comparison {comparison_id} exists...")
+
         if not comparison_doc.exists:
-            # ✅ Create new document with default values if missing
+            # ✅ Create new document if missing
             comparison_ref.set({
                 "school": school_name,
                 "year_group": year_group,
@@ -170,17 +182,21 @@ def store_comparison(img1, img2, school_name, year_group, winner):
                 "comparison_count": 1,  # Initialize counter
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-            st.success("✅ New comparison stored successfully!")  # Debugging feedback
+            st.success(f"✅ New comparison stored for {img1} vs {img2}")
+            st.write(f"DEBUG: New comparison created: {comparison_id}")
+
         else:
             # ✅ Increment comparison count if document already exists
             comparison_ref.update({
                 "comparison_count": firestore.Increment(1),
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-            st.success("✅ Comparison updated successfully!")  # Debugging feedback
+            st.success(f"✅ Comparison updated for {img1} vs {img2}")
+            st.write(f"DEBUG: Existing comparison updated: {comparison_id}")
 
     except Exception as e:
         st.error(f"❌ Failed to store comparison: {str(e)}")
+        st.write(f"DEBUG: Error storing comparison - {e}")
 
 
 # ✅ Define function to store user ranking data (Moved to Global Scope)
@@ -315,6 +331,9 @@ if st.session_state.logged_in:
                     uploaded_image_urls.append(image_url)
                     st.sidebar.success(f"{uploaded_file.name} uploaded successfully as {grade_label}")
 
+                    # ✅ Debug: Print uploaded file info
+                    st.write(f"DEBUG: Uploaded Image {uploaded_file.name} → URL: {image_url}")
+
                 except Exception as e:
                     st.sidebar.error(f"❌ Upload Failed: {str(e)}")
 
@@ -324,49 +343,46 @@ if st.session_state.logged_in:
             # ✅ Debugging: Ensure uploaded images are stored
             st.write("DEBUG: Uploaded Images", st.session_state.image_urls)
 
-# ✅ Ensure Firebase is initialized
+# ✅ Ensure Firebase is initialized BEFORE fetching images
 if not firebase_admin._apps:
     st.error("❌ Firebase is not initialized. Please check your configuration.")
     st.stop()
 
-# ✅ Fetch images after upload to ensure availability
-if "year_group" in st.session_state and st.session_state.year_group:
-    if "school_name" in st.session_state and st.session_state.school_name:
-        docs = db.collection("writing_samples")\
-                 .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
-                 .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
-                 .stream()
-    else:
-        docs = []
-        st.warning("⚠️ Please select a school first.")
-else:
-    docs = []
-    st.warning("⚠️ Please select a year group first.")
+# ✅ Fetch images from Firestore
+docs = db.collection("writing_samples")\
+         .where(filter=firestore.FieldFilter("school", "==", st.session_state.school_name))\
+         .where(filter=firestore.FieldFilter("year_group", "==", st.session_state.year_group))\
+         .stream()
+
+doc_list = list(docs)  # Convert generator to list
+
+if not doc_list:
+    st.warning("⚠️ No documents retrieved from Firestore. Please check your query.")
+    st.stop()
+
+st.write("DEBUG: Retrieved Documents", [doc.to_dict() for doc in doc_list])
 
 retrieved_images = []
-image_pool = {"GDS": [], "EXS": [], "WTS": []}
-
-for doc in docs:
+for doc in doc_list:
     data = doc.to_dict()
-    if "image_url" in data and "grade_label" in data:
+    if "image_url" in data:
         retrieved_images.append(data["image_url"])
-        if data["grade_label"] in image_pool:
-            image_pool[data["grade_label"]].append(data["image_url"])
-        else:
-            st.warning(f"⚠️ Image {data['image_url']} has an unknown grade label and won't be paired.")
-
-        # ✅ Ensure comparison count tracking
-        st.session_state.image_comparison_counts.setdefault(data["image_url"], 0)
-
-st.write("DEBUG: Image Pool", image_pool)  # ✅ Debugging image categorization
+        st.write("DEBUG: Image Retrieved", data["image_url"])
 
 # ✅ Ensure images are retrieved successfully
 if not retrieved_images:
     st.warning("⚠️ No images found in Firestore for this year group. Please upload images.")
     st.stop()
 
+# ✅ Store retrieved images in session state
 st.session_state.image_urls = retrieved_images
-st.write("DEBUG: Retrieved Images", st.session_state.image_urls)  # ✅ Debugging retrieval
+st.write("DEBUG: Final Retrieved Images", st.session_state.image_urls)  # ✅ Debugging retrieval
+
+# ✅ Display images properly before generating pairings
+if st.session_state.image_urls:
+    st.image(st.session_state.image_urls, caption="Uploaded Writing Samples", use_column_width=True)
+else:
+    st.warning("⚠️ No images available for this year group.")
 
 # ✅ Ensure fair sample distribution across GDS, EXS, and WTS
 sample_pool = {"GDS": [], "EXS": [], "WTS": []}
@@ -377,6 +393,7 @@ for img_url in st.session_state.image_urls:
             sample_pool[grade].append(img_url)
 
 st.write("DEBUG: Sample Pool Before Pairing", sample_pool)  # ✅ Debugging
+
 
 # ✅ Define a maximum number of pairs based on available images
 max_pairs = min(40, sum(len(sample_pool[k]) for k in sample_pool) // 2)
