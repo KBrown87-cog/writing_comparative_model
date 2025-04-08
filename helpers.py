@@ -1,0 +1,128 @@
+import numpy as np
+import streamlit as st
+import hashlib
+from scipy.optimize import minimize
+from google.cloud.firestore_v1 import FieldFilter
+from firebase_admin import firestore
+
+@st.cache_data(ttl=60)  # ✅ Cache Firestore results for 60 seconds
+def fetch_all_comparisons(school_name, year_group):
+    """Fetches all writing comparisons for a given school and year group from Firestore."""
+    if not school_name or not year_group:
+        raise ValueError("❌ Invalid school name or year group provided.")
+
+    try:
+        comparisons_ref = db.collection("comparisons")\
+            .where(filter=FieldFilter("school", "==", school_name))\
+            .where(filter=FieldFilter("year_group", "==", year_group))\
+            .stream()
+
+        comparisons = [doc.to_dict() for doc in comparisons_ref]
+
+        if not comparisons:
+            raise ValueError("⚠️ No comparisons found for this school and year group.")
+
+        return comparisons
+
+    except Exception as e:
+        raise RuntimeError(f"❌ Failed to fetch comparisons from Firestore: {str(e)}")
+
+def calculate_rankings(comparisons):
+    """Applies Bradley-Terry Model to rank images, incorporating weighting and convergence checks."""
+    
+    if not comparisons:
+        st.warning("⚠️ No valid comparisons available. Ranking cannot be calculated yet.")
+        return None
+
+    comparison_counts = {}
+    valid_comparisons = []
+
+    for comparison in comparisons:
+        img1 = comparison.get("image_1")
+        img2 = comparison.get("image_2")
+
+        # ✅ Fallback: Use most common winner from list if 'winner' is missing
+        winner = comparison.get("winner")
+        if not winner:
+            winners_list = comparison.get("winners", [])
+            if winners_list:
+                winner = max(set(winners_list), key=winners_list.count)
+
+        comparison_count = comparison.get("comparison_count", 1)
+
+        if not all([img1, img2, winner]):
+            st.warning(f"⚠️ Invalid comparison data found: {comparison}")
+            continue
+
+        # Accumulate comparison counts
+        comparison_counts[img1] = comparison_counts.get(img1, 0) + comparison_count
+        comparison_counts[img2] = comparison_counts.get(img2, 0) + comparison_count
+
+        # Append only valid comparisons
+        valid_comparisons.append({
+            "image_1": img1,
+            "image_2": img2,
+            "winner": winner
+        })
+
+    sample_names = [name for name in comparison_counts.keys() if comparison_counts[name] > 0]
+
+    if not sample_names:
+        st.warning("⚠️ No valid image comparisons available for ranking.")
+        return None
+
+    # Initialize scores
+    initial_scores = {name: np.random.uniform(-0.1, 0.1) for name in sample_names}
+
+    try:
+        result = minimize(
+            lambda s: bradley_terry_log_likelihood(
+                dict(zip(sample_names, s)),
+                valid_comparisons,
+                comparison_counts
+            ),
+            list(initial_scores.values()), 
+            method='L-BFGS-B'
+        )
+
+        if not result.success:
+            st.warning("⚠️ Optimization failed to converge. Using default scores.")
+            return {name: 50 for name in sample_names}
+
+        raw_scores = dict(zip(sample_names, result.x))
+        min_score, max_score = min(raw_scores.values()), max(raw_scores.values())
+
+        if max_score == min_score:
+            return {name: 50 for name in sample_names}
+
+        normalized_scores = {
+            name: 100 * (score - min_score) / (max_score - min_score)
+            for name, score in raw_scores.items()
+        }
+
+        return normalized_scores
+
+    except Exception as e:
+        st.error(f"❌ Ranking Calculation Failed: {str(e)}")
+        return None
+
+
+def save_rankings_to_firestore(rankings, school_name, year_group):
+    """Saves the normalized ranking scores into Firestore under the 'rankings' collection."""
+    try:
+        for image_url, score in rankings.items():
+            doc_id = hashlib.sha256(image_url.encode()).hexdigest()
+            doc_ref = db.collection("rankings").document(doc_id)
+
+            doc_ref.set({
+                "school": school_name,
+                "year_group": year_group,
+                "image_url": image_url,
+                "score": score,
+                "comparison_count": st.session_state.comparison_counts.get(image_url, 0),
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+
+
+    except Exception as e:
+        st.error(f"❌ Failed to save rankings: {str(e)}")
