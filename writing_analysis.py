@@ -17,6 +17,10 @@ from collections import defaultdict
 from google.cloud.firestore_v1 import FieldFilter
 from helpers import calculate_rankings, fetch_all_comparisons, save_rankings_to_firestore
 
+# ✅ Force defaults early to prevent Streamlit Cloud bug
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
