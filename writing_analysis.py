@@ -251,29 +251,53 @@ def generate_pairings(sample_pool, max_retries=10):
 
 # ✅ Ensure login form only appears if user is not logged in
 if not st.session_state.get("logged_in", False):
+    # === Set background image === #
+    page_bg_img = f"""
+    <style>
+    [data-testid="stAppViewContainer"] > .main {{
+        background-image: url("assets/mainpage_background.jpg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }}
+
+    [data-testid="stSidebar"] {{
+        background-color: rgba(255, 255, 255, 0.9);
+    }}
+    </style>
+    """
+    st.markdown(page_bg_img, unsafe_allow_html=True)
+
+    # === Welcome content on main screen === #
+    st.markdown("<h1 style='text-align: center; color: white;'>Welcome to the Comparative Judgement Tool</h1>", unsafe_allow_html=True)
+    st.image("assets/school_badge.png", width=250)
+
+    # === Login form in sidebar === #
     with st.sidebar:
         st.header("Login")
         school_name = st.text_input("Enter School Name", key="school_input").strip()
         password = st.text_input("Enter Password", type="password", help="Case-sensitive", key="password_input")
         login_button = st.button("Login")
 
-    if login_button:
-        if not school_name or not password:
-            st.sidebar.warning("Please enter both school name and password.")
-        elif "SCHOOL_CREDENTIALS" not in globals():
-            st.error("❌ SCHOOL_CREDENTIALS is not available. Please check your configuration.")
-        elif school_name in st.session_state["failed_attempts"] and st.session_state["failed_attempts"][school_name] >= 3:
-            st.sidebar.error("Too many failed attempts. Try again later.")
-        elif school_name and school_name in SCHOOL_CREDENTIALS:
-            st.session_state["logged_in"] = True
-            st.session_state["school_name"] = school_name
-            st.session_state["failed_attempts"][school_name] = 0
-            st.sidebar.success(f"Logged in as {school_name}")
-            st.rerun()
-        else:
-            st.session_state["failed_attempts"][school_name] = st.session_state["failed_attempts"].get(school_name, 0) + 1
-            st.sidebar.error(f"Invalid credentials. Attempts: {st.session_state['failed_attempts'][school_name]}/3")
+        if login_button:
+            if not school_name or not password:
+                st.warning("Please enter both school name and password.")
+            elif "SCHOOL_CREDENTIALS" not in globals():
+                st.error("❌ SCHOOL_CREDENTIALS is not available. Please check your configuration.")
+            elif school_name in st.session_state["failed_attempts"] and st.session_state["failed_attempts"][school_name] >= 3:
+                st.error("Too many failed attempts. Try again later.")
+            elif school_name and school_name in SCHOOL_CREDENTIALS:
+                st.session_state["logged_in"] = True
+                st.session_state["school_name"] = school_name
+                st.session_state["failed_attempts"][school_name] = 0
+                st.success(f"Logged in as {school_name}")
+                st.rerun()
+            else:
+                st.session_state["failed_attempts"][school_name] = st.session_state["failed_attempts"].get(school_name, 0) + 1
+                st.error(f"Invalid credentials. Attempts: {st.session_state['failed_attempts'][school_name]}/3")
 
+# ✅ Logged-in state remains unchanged
 else:
     with st.sidebar:
         st.header(f"Logged in as {st.session_state.school_name}")
@@ -285,6 +309,7 @@ else:
             st.session_state.pop(key, None)
         st.sidebar.info("You have been logged out.")
         st.rerun()
+
 
 # ✅ Only fetch comparisons if images already exist
 if st.session_state.get("logged_in") and st.session_state.get("school_name") and st.session_state.get("image_urls"):
