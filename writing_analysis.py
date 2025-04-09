@@ -24,7 +24,15 @@ if "logged_in" not in st.session_state:
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
-st.markdown("<h1 style='color: #f5f5f5; text-align: center;'>Comparative Judgement Writing Assessment</h1>", unsafe_allow_html=True)
+st.markdown("""
+<h1 style='
+    color: #f5f5f5;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+'>
+Comparative Judgement Writing Assessment
+</h1>
+""", unsafe_allow_html=True)
 
 
 # === ✅ Now Initialize Session State === #
