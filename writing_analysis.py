@@ -99,7 +99,7 @@ else:
 
 
 # ✅ Initialize Firebase using `st.secrets`, ensuring it only runs once
-if not firebase_admin._apps:
+if "firestore_client" not in st.session_state or "storage_bucket" not in st.session_state:
     try:
         firebase_config = {
             "type": st.secrets["FIREBASE"]["TYPE"],
@@ -116,11 +116,14 @@ if not firebase_admin._apps:
 
         cred_json = json.dumps(firebase_config)
         cred = credentials.Certificate(json.loads(cred_json))
-        firebase_admin.initialize_app(cred, {"storageBucket": st.secrets["FIREBASE"]["STORAGE_BUCKET"]})
+
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred, {"storageBucket": st.secrets["FIREBASE"]["STORAGE_BUCKET"]})
 
         st.session_state["firestore_client"] = firestore.client()
         st.session_state["storage_bucket"] = storage.bucket()
         st.session_state["firebase_initialized"] = True
+
     except Exception as e:
         st.error(f"❌ Firebase initialization failed: {str(e)}")
         st.stop()
