@@ -73,11 +73,6 @@ st.session_state.setdefault("selection_locked", False)
 st.session_state.setdefault("generated_pairs", set())
 st.session_state.setdefault("samples_with_labels", [])
 
-st.sidebar.markdown("## 🔍 Debug")
-st.sidebar.write("Logged in:", st.session_state.get("logged_in"))
-st.sidebar.write("Firestore ready:", "firestore_client" in st.session_state)
-st.sidebar.write("Storage ready:", "storage_bucket" in st.session_state)
-st.sidebar.write("Secrets:", st.secrets.keys())
 
 # === FORMAT YEAR GROUP === #
 if st.session_state.get("year_group"):
