@@ -1,2 +1,2 @@
-# Firebase credentials
+# Specifically ignore Firebase service accounts
 *.json
