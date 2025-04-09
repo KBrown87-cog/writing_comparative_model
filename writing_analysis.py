@@ -254,17 +254,28 @@ if not st.session_state.get("logged_in", False):
     # === Set background image === #
     page_bg_img = """
     <style>
-    /* Full background image */
+    /* Full-page background image */
     [data-testid="stAppViewContainer"] {
         background: url('https://i.imgur.com/FOuu4dM.jpg') no-repeat center center fixed;
         background-size: cover;
     }
 
-    /* Transparent sidebar */
+    /* Sidebar overlay with blur effect */
     [data-testid="stSidebar"] {
-        background-color: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(4px);
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 20rem;
+        z-index: 1000;
+        background-color: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(6px);
         border-right: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    /* Push the main content to the right to not overlap */
+    .css-1outpf7 { 
+        margin-left: 20rem; 
     }
     </style>
     """
