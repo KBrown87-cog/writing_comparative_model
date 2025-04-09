@@ -38,7 +38,7 @@ Horizon Comparative Judgement Tool for Writing
 
 # School logo in the top-left of the sidebar
 with st.sidebar:
-    st.image("https://i.imgur.com/pUTJNis.png", width=150)
+    st.image("https://i.imgur.com/6jwSFry.png", width=150)
 
 
 
