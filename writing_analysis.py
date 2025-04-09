@@ -254,21 +254,21 @@ if not st.session_state.get("logged_in", False):
     # === Set background image === #
     page_bg_img = """
     <style>
-    [data-testid="stAppViewContainer"] > .main {
-        background-image: url("https://i.imgur.com/FOuu4dM.jpg");
+    /* Full background image */
+    [data-testid="stAppViewContainer"] {
+        background: url('https://i.imgur.com/FOuu4dM.jpg') no-repeat center center fixed;
         background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        min-height: 100vh;
     }
+
+    /* Transparent sidebar */
     [data-testid="stSidebar"] {
-        background-color: rgba(255, 255, 255, 0.9);
+        background-color: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(4px);
+        border-right: 1px solid rgba(255, 255, 255, 0.3);
     }
     </style>
     """
     st.markdown(page_bg_img, unsafe_allow_html=True)
-    st.image("https://i.imgur.com/FOuu4dM.jpg", caption="✅ Background image loads", use_container_width=True)
 
 
 
