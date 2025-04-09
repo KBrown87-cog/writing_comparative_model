@@ -73,6 +73,11 @@ st.session_state.setdefault("selection_locked", False)
 st.session_state.setdefault("generated_pairs", set())
 st.session_state.setdefault("samples_with_labels", [])
 
+st.sidebar.markdown("## 🔍 Debug")
+st.sidebar.write("Logged in:", st.session_state.get("logged_in"))
+st.sidebar.write("Firestore ready:", "firestore_client" in st.session_state)
+st.sidebar.write("Storage ready:", "storage_bucket" in st.session_state)
+st.sidebar.write("Secrets:", st.secrets.keys())
 
 # === FORMAT YEAR GROUP === #
 if st.session_state.get("year_group"):
@@ -359,8 +364,13 @@ else:
         st.rerun()
 
 
-# ✅ Only fetch comparisons if images already exist
-if st.session_state.get("logged_in") and st.session_state.get("school_name") and st.session_state.get("image_urls"):
+# ✅ Only fetch comparisons if Firebase is initialized and images exist
+if (
+    st.session_state.get("logged_in") and
+    st.session_state.get("school_name") and
+    st.session_state.get("image_urls") and
+    "firestore_client" in st.session_state
+):
     try:
         comparisons = fetch_all_comparisons(
             st.session_state["school_name"],
@@ -368,11 +378,11 @@ if st.session_state.get("logged_in") and st.session_state.get("school_name") and
         )
         st.session_state["comparisons"] = comparisons
     except Exception as e:
-        # Don't show errors unless there are comparisons
         if "No comparisons found" not in str(e):
             st.warning(str(e))
 else:
     comparisons = []
+
 
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
