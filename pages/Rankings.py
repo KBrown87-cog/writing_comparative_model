@@ -106,32 +106,37 @@ if ranked_images:
     # 🖼️ Thumbnail Table
     st.subheader("🖼️ Visual Ranking Table")
 
-    # Convert image URL into HTML thumbnail
+    # Convert ranked_images to DataFrame
+    df = pd.DataFrame(ranked_images).dropna(subset=["score"])
+
+    # Compute band if needed
+    if df["score"].empty:
+        st.warning("⚠️ Not enough rankings to categorize writing samples.")
+        df["Standard"] = "Unranked"
+    else:
+        if len(df) < 10:
+            min_score, max_score = df["score"].min(), df["score"].max()
+            wts_cutoff = min_score + (max_score - min_score) * 0.3
+            gds_cutoff = max_score - (max_score - min_score) * 0.3
+        else:
+            wts_cutoff = np.percentile(df["score"], 25)
+            gds_cutoff = np.percentile(df["score"], 75)
+
+        df["Standard"] = df["score"].apply(
+            lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS")
+        )
+
+    # ✅ Safely create and rename columns
     df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
     df["Teacher Judgement"] = df.get("grade_label", "Not Provided")
+    df["Score"] = df["score"]
+    df["Comparison Count"] = df.get("comparison_count", 0)
+    df["Standard"] = df["Standard"]
 
-
-    # Create and render HTML table
+    # ✅ Render the table
     st.markdown(
         df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Standard"]]
-        .rename(columns={
-            "score": "Score",
-            "comparison_count": "Comparison Count"
-        })
         .to_html(escape=False, index=False),
         unsafe_allow_html=True
     )
 
-    # 🏆 Top-ranked image previews
-    st.subheader("🏆 Top-Ranked Writing Samples")
-
-    for i, row in enumerate(ranked_images[:10], start=1):
-        st.image(
-            row["image_url"],
-            caption=f"🏆 Rank {i} | ⭐ Score: {row['score']:.2f} | 🔄 Compared: {row.get('comparison_count', 0)}",
-            use_container_width=True
-        )
-        st.markdown("---")
-
-else:
-    st.info("⚠️ No ranked images found. Try comparing more samples from the main page.")
