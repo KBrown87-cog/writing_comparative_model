@@ -252,26 +252,20 @@ def generate_pairings(sample_pool, max_retries=10):
 # ✅ Ensure login form only appears if user is not logged in
 if not st.session_state.get("logged_in", False):
     # === Set background image === #
-    page_bg_img = f"""
+    page_bg_img = """
     <style>
-    [data-testid="stAppViewContainer"] > .main {{
-        background-image: url("https://raw.githubusercontent.com/KBrown87-cog/writing_comparative_model/main/assets/mainpage%20background.jpg");
+    body {
+        background-image: url('https://raw.githubusercontent.com/KBrown87-cog/writing_comparative_model/main/assets/mainpage%20background.jpg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
-    }}
-
-    [data-testid="stSidebar"] {{
-        background-color: rgba(255, 255, 255, 0.9);
-    }}
+    }
     </style>
     """
+    st.write("✅ CSS background block loaded")
     st.markdown(page_bg_img, unsafe_allow_html=True)
 
-
-    # === Welcome content on main screen === #
-    st.markdown("<h1 style='text-align: center; color: white;'>Welcome to the Comparative Judgement Tool</h1>", unsafe_allow_html=True)
 
 
     # === Login form in sidebar === #
