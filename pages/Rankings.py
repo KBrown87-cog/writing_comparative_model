@@ -127,7 +127,7 @@ if ranked_images:
         )
 
     # ✅ Safely create and rename columns
-    df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
+    df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="240">')
     df["Teacher Judgement"] = df["grade_label"].fillna("Not Provided")
     df["Score"] = df["score"]
     df["Comparison Count"] = df["comparison_count"].fillna(0)
