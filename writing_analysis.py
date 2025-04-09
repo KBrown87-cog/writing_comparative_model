@@ -301,30 +301,32 @@ if st.session_state.get("logged_in") and st.session_state.get("school_name") and
 else:
     comparisons = []
 
-
 # === AFTER LOGIN === #
 if st.session_state.logged_in:
-    school_name = st.session_state.school_name
+    school_name = st.session_state["school_name"]
 
     # === YEAR GROUP SELECTION === #
     st.sidebar.header("Select Year Group")
 
-    # Set a default in session state
+    # Set a default year group in session state
     st.session_state.setdefault("year_group", "Year 1")
 
-    # Render the selectbox using the current session value
+    # Render the selectbox
     selected_year = st.sidebar.selectbox(
         "Select Year Group",
         ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"],
         index=["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"].index(st.session_state["year_group"])
     )
 
-    # Update if changed
+    # If changed, update and rerun
     if selected_year != st.session_state["year_group"]:
         st.session_state["year_group"] = selected_year
         st.session_state.image_urls = []
         st.session_state.image_comparison_counts = {}
         st.rerun()
+
+    # ✅ Set local shortcut for easier use
+    year_group = st.session_state["year_group"]
 
     # === IMAGE UPLOAD SECTION === #
     st.sidebar.header("Upload Writing Samples")
@@ -332,10 +334,10 @@ if st.session_state.logged_in:
         "Upload Writing Samples",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=st.session_state["year_group"]  # ✅ Always safe
+        key=year_group  # ✅ Now safely defined
     )
 
-    # ✅ Initialize the session list to store image + label
+    # ✅ Init session storage for grading info
     st.session_state.setdefault("samples_with_labels", [])
 
     if uploaded_files:
@@ -382,7 +384,7 @@ if st.session_state.logged_in:
 
                     uploaded_image_urls.append(image_url)
 
-                    # ✅ Store image + teacher label in session
+                    # ✅ Save image + teacher label
                     st.session_state["samples_with_labels"].append({
                         "image_url": image_url,
                         "grade_label": grade_label
@@ -398,6 +400,7 @@ if st.session_state.logged_in:
             for url in uploaded_image_urls:
                 if url not in st.session_state.image_urls:
                     st.session_state.image_urls.append(url)
+
 
                     
     # === RANKINGS PAGE BUTTON === #
