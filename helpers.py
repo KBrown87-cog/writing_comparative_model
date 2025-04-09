@@ -76,7 +76,6 @@ def calculate_rankings(comparisons):
         img1 = comparison.get("image_1")
         img2 = comparison.get("image_2")
 
-        # ✅ Fallback: Use most common winner from list if 'winner' is missing
         winner = comparison.get("winner")
         if not winner:
             winners_list = comparison.get("winners", [])
@@ -89,11 +88,9 @@ def calculate_rankings(comparisons):
             st.warning(f"⚠️ Invalid comparison data found: {comparison}")
             continue
 
-        # Accumulate comparison counts
         comparison_counts[img1] = comparison_counts.get(img1, 0) + comparison_count
         comparison_counts[img2] = comparison_counts.get(img2, 0) + comparison_count
 
-        # Append only valid comparisons
         valid_comparisons.append({
             "image_1": img1,
             "image_2": img2,
@@ -106,7 +103,6 @@ def calculate_rankings(comparisons):
         st.warning("⚠️ No valid image comparisons available for ranking.")
         return None
 
-    # Initialize scores
     initial_scores = {name: np.random.uniform(-0.1, 0.1) for name in sample_names}
 
     try:
@@ -135,11 +131,15 @@ def calculate_rankings(comparisons):
             for name, score in raw_scores.items()
         }
 
+        # ✅ NEW: Store comparison counts for use when saving
+        st.session_state["comparison_counts"] = comparison_counts
+
         return normalized_scores
 
     except Exception as e:
         st.error(f"❌ Ranking Calculation Failed: {str(e)}")
         return None
+
 
 
 def save_rankings_to_firestore(rankings, school_name, year_group):
