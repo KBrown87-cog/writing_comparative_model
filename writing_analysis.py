@@ -255,7 +255,7 @@ if not st.session_state.get("logged_in", False):
     page_bg_img = f"""
     <style>
     [data-testid="stAppViewContainer"] > .main {{
-        background-image: url("assets/mainpage_background.jpg");
+        background-image: url("https://raw.githubusercontent.com/KBrown87-cog/writing_comparative_model/main/assets/mainpage%20background.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -269,9 +269,10 @@ if not st.session_state.get("logged_in", False):
     """
     st.markdown(page_bg_img, unsafe_allow_html=True)
 
+
     # === Welcome content on main screen === #
     st.markdown("<h1 style='text-align: center; color: white;'>Welcome to the Comparative Judgement Tool</h1>", unsafe_allow_html=True)
-    st.image("assets/school_badge.png", width=250)
+
 
     # === Login form in sidebar === #
     with st.sidebar:
