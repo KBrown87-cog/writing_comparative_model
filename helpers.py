@@ -5,9 +5,11 @@ from scipy.optimize import minimize
 from google.cloud.firestore_v1 import FieldFilter
 from firebase_admin import firestore
 
-@st.cache_data(ttl=60)  # ✅ Cache Firestore results for 60 seconds
+@st.cache_data(ttl=60)
 def fetch_all_comparisons(school_name, year_group):
     """Fetches all writing comparisons for a given school and year group from Firestore."""
+    db = st.session_state["firestore_client"]  # ✅ ADD THIS
+
     if not school_name or not year_group:
         raise ValueError("❌ Invalid school name or year group provided.")
 
@@ -26,6 +28,7 @@ def fetch_all_comparisons(school_name, year_group):
 
     except Exception as e:
         raise RuntimeError(f"❌ Failed to fetch comparisons from Firestore: {str(e)}")
+
 
 def calculate_rankings(comparisons):
     """Applies Bradley-Terry Model to rank images, incorporating weighting and convergence checks."""
@@ -109,6 +112,8 @@ def calculate_rankings(comparisons):
 
 def save_rankings_to_firestore(rankings, school_name, year_group):
     """Saves the normalized ranking scores into Firestore under the 'rankings' collection."""
+    db = st.session_state["firestore_client"]  # ✅ ADD THIS
+
     try:
         for image_url, score in rankings.items():
             doc_id = hashlib.sha256(image_url.encode()).hexdigest()
@@ -122,7 +127,6 @@ def save_rankings_to_firestore(rankings, school_name, year_group):
                 "comparison_count": st.session_state.comparison_counts.get(image_url, 0),
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
-
 
     except Exception as e:
         st.error(f"❌ Failed to save rankings: {str(e)}")
