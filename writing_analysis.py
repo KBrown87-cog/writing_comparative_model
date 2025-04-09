@@ -120,12 +120,14 @@ if not firebase_admin._apps:
         st.error(f"❌ Firebase initialization failed: {str(e)}")
         st.stop()
 
-try:
-    db = st.session_state["firestore_client"]
-    bucket = st.session_state["storage_bucket"]
-except KeyError:
-    st.error("❌ Firestore or Storage is not initialized.")
+# ✅ Double-check Firestore and Storage are initialized
+if "firestore_client" not in st.session_state or "storage_bucket" not in st.session_state:
+    st.warning("⏳ Initializing Firebase... Please refresh if this message does not go away.")
     st.stop()
+
+db = st.session_state["firestore_client"]
+bucket = st.session_state["storage_bucket"]
+
 
 
 # === HELPER FUNCTIONS: FIRESTORE FETCHING === #
