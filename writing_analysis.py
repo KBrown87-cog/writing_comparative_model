@@ -39,17 +39,19 @@ Horizon Comparative Judgement Tool for Writing
 # School logo in the top-left of the sidebar
 with st.sidebar:
     st.image("https://i.imgur.com/6jwSFry.png", width=150)
-
 hide_default_page_tabs = """
 <style>
-/* Hide Streamlit multipage navigation tabs */
+/* Hide entire sidebar nav block including page tabs */
 [data-testid="stSidebarNav"] {
-    display: none;
+    display: none !important;
+}
+
+section[data-testid="stSidebar"] ul {
+    display: none !important;
 }
 </style>
 """
 st.markdown(hide_default_page_tabs, unsafe_allow_html=True)
-
 
 # === ✅ Now Initialize Session State === #
 
