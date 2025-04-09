@@ -24,6 +24,8 @@ if "logged_in" not in st.session_state:
 
 # === STREAMLIT PAGE SETUP === #
 st.set_page_config(layout="wide")
+
+# Styled title in the main app area
 st.markdown("""
 <h1 style='
     color: #f5f5f5;
@@ -33,6 +35,11 @@ st.markdown("""
 Horizon Comparative Judgement Tool for Writing
 </h1>
 """, unsafe_allow_html=True)
+
+# School logo in the top-left of the sidebar
+with st.sidebar:
+    st.image("https://i.imgur.com/pUTJNis.png", width=150)
+
 
 
 # === ✅ Now Initialize Session State === #
