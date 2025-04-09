@@ -312,7 +312,7 @@ if st.session_state.logged_in:
         "Upload Writing Samples",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=year_group
+        key=st.session_state.get("year_group", "Year 1")
     )
 
     # ✅ Initialize the session list to store image + label
