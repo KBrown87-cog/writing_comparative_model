@@ -29,6 +29,38 @@ def fetch_all_comparisons(school_name, year_group):
     except Exception as e:
         raise RuntimeError(f"❌ Failed to fetch comparisons from Firestore: {str(e)}")
 
+def bradley_terry_log_likelihood(scores, comparisons, comparison_counts):
+    """Calculates likelihood for Bradley-Terry ranking with weighting and numerical stability."""
+    likelihood = 0
+
+    if not comparisons:
+        st.warning("⚠️ No comparisons available for ranking.")
+        return None  # ✅ Prevents invalid calculations
+
+    for comparison in comparisons:
+        img1 = comparison.get("image_1")
+        img2 = comparison.get("image_2")
+        winner = comparison.get("winner")
+
+        if not all([img1, img2, winner]):
+            continue  # Skip invalid comparisons
+
+        s1, s2 = scores.get(img1, 0), scores.get(img2, 0)  # Default scores
+
+        # ✅ Log-Sum-Exp Trick for Numerical Stability
+        max_score = max(s1, s2)
+        exp_s1, exp_s2 = np.exp(s1 - max_score), np.exp(s2 - max_score)
+        p1 = exp_s1 / (exp_s1 + exp_s2)
+        p2 = exp_s2 / (exp_s1 + exp_s2)
+
+        # ✅ Smoothed Weighting Formula
+        weight = np.log1p(comparison_counts.get(img1, 1))  
+
+        # ✅ Apply logarithmic likelihood with weight
+        likelihood += weight * np.log(p1 if winner == img1 else p2)
+
+    return -likelihood  # ✅ Negative log-likelihood for minimization
+
 
 def calculate_rankings(comparisons):
     """Applies Bradley-Terry Model to rank images, incorporating weighting and convergence checks."""
