@@ -67,13 +67,16 @@ if not ranked_images:
         st.error(f"❌ Failed to calculate or fetch rankings: {str(e)}")
 
 if ranked_images:
-    df = pd.DataFrame(ranked_images, columns=["image_url", "score", "comparison_count"])
+    # Convert to DataFrame
+    df = pd.DataFrame(ranked_images)
     df = df.dropna(subset=["score"])
 
+    # If scores are missing, skip categorization
     if df["score"].empty:
         st.warning("⚠️ Not enough rankings to categorize writing samples.")
         df["Standard"] = "Unranked"
     else:
+        # Set cutoffs
         if len(df) < 10:
             min_score, max_score = df["score"].min(), df["score"].max()
             wts_cutoff = min_score - 1 if min_score == max_score else min_score + (max_score - min_score) * 0.3
@@ -82,26 +85,29 @@ if ranked_images:
             wts_cutoff = np.percentile(df["score"], 25)
             gds_cutoff = np.percentile(df["score"], 75)
 
+        # Assign standard levels
         df["Standard"] = df["score"].apply(
             lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS")
         )
 
+    # 🖼️ Thumbnail Table
     st.subheader("🖼️ Visual Ranking Table")
 
-    # Rebuild the DataFrame to include thumbnails
+    # Convert image URL into HTML thumbnail
     df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
-    df["Score"] = df["score"]
-    df["Comparison Count"] = df["comparison_count"]
-    df["Standard"] = df["Standard"]
 
-    # Render the table with HTML so the images show as thumbnails
+    # Create and render HTML table
     st.markdown(
-        df[["Writing Sample", "Score", "Comparison Count", "Standard"]]
+        df[["Writing Sample", "score", "comparison_count", "Standard"]]
+        .rename(columns={
+            "score": "Score",
+            "comparison_count": "Comparison Count"
+        })
         .to_html(escape=False, index=False),
         unsafe_allow_html=True
     )
 
-
+    # 🏆 Top-ranked image previews
     st.subheader("🏆 Top-Ranked Writing Samples")
 
     for i, row in enumerate(ranked_images[:10], start=1):
@@ -110,8 +116,7 @@ if ranked_images:
             caption=f"🏆 Rank {i} | ⭐ Score: {row['score']:.2f} | 🔄 Compared: {row.get('comparison_count', 0)}",
             use_container_width=True
         )
-        st.markdown("---")  # Horizontal line between entries
-
+        st.markdown("---")
 
 else:
     st.info("⚠️ No ranked images found. Try comparing more samples from the main page.")
