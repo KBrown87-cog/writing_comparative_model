@@ -25,6 +25,7 @@ if st.sidebar.button("🔙 Back to Judging"):
 # === FETCH RANKINGS === #
 @st.cache_data(ttl=60)
 def fetch_ranked_images(school_name, year_group):
+    """Fetch ranked writing samples with scores and teacher judgement."""
     try:
         docs = (
             st.session_state["firestore_client"].collection("rankings")
@@ -35,10 +36,22 @@ def fetch_ranked_images(school_name, year_group):
                 .limit(50)
                 .stream()
         )
-        return [doc.to_dict() for doc in docs if "image_url" in doc.to_dict() and "score" in doc.to_dict()]
+
+        # Ensure we return all needed fields
+        ranked = []
+        for doc in docs:
+            data = doc.to_dict()
+            if "image_url" in data and "score" in data:
+                # Include teacher judgement if available
+                data["grade_label"] = data.get("grade_label", "Not Provided")
+                ranked.append(data)
+
+        return ranked
+
     except Exception as e:
         st.error(f"❌ Failed to fetch rankings: {str(e)}")
         return []
+
 
 # === VALIDATE CONTEXT === #
 if not st.session_state.get("logged_in") or not st.session_state.get("school_name"):
@@ -95,10 +108,12 @@ if ranked_images:
 
     # Convert image URL into HTML thumbnail
     df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
+    df["Teacher Judgement"] = df.get("grade_label", "Not Provided")
+
 
     # Create and render HTML table
     st.markdown(
-        df[["Writing Sample", "score", "comparison_count", "Standard"]]
+        df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Standard"]]
         .rename(columns={
             "score": "Score",
             "comparison_count": "Comparison Count"
