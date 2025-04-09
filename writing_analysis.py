@@ -255,7 +255,7 @@ if not st.session_state.get("logged_in", False):
     page_bg_img = """
     <style>
     body {
-        background-image: url('https://raw.githubusercontent.com/KBrown87-cog/writing_comparative_model/main/assets/mainpage%20background.jpg');
+        background-image: url('https://i.imgur.com/FOuu4dM.jpg');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -263,9 +263,7 @@ if not st.session_state.get("logged_in", False):
     }
     </style>
     """
-    st.write("✅ CSS background block loaded")
     st.markdown(page_bg_img, unsafe_allow_html=True)
-
 
 
     # === Login form in sidebar === #
