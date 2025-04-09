@@ -128,9 +128,9 @@ if ranked_images:
 
     # ✅ Safely create and rename columns
     df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
-    df["Teacher Judgement"] = df.get("grade_label", "Not Provided")
+    df["Teacher Judgement"] = df["grade_label"].fillna("Not Provided")
     df["Score"] = df["score"]
-    df["Comparison Count"] = df.get("comparison_count", 0)
+    df["Comparison Count"] = df["comparison_count"].fillna(0)
     df["Standard"] = df["Standard"]
 
     # ✅ Render the table
@@ -140,3 +140,4 @@ if ranked_images:
         unsafe_allow_html=True
     )
 
+    
