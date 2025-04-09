@@ -44,6 +44,7 @@ st.session_state.setdefault("comparison_counts", {})  # ✅ Track how many times
 st.session_state.setdefault("used_images", set())  # ✅ Track used images to prevent duplicates
 st.session_state.setdefault("selection_locked", False)
 st.session_state.setdefault("generated_pairs", set())
+st.session_state.setdefault("samples_with_labels", [])
 
 
 # === FORMAT YEAR GROUP === #
@@ -305,18 +306,6 @@ else:
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
 
-    # === YEAR GROUP SELECTION === #
-    st.sidebar.header("Select Year Group")
-    year_group = st.sidebar.selectbox("Select Year Group", [
-        "Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"
-    ])
-    previous_year_group = st.session_state.get("year_group", "")
-
-    if year_group != previous_year_group:
-        st.session_state.year_group = year_group
-        st.session_state.image_urls = []
-        st.session_state.image_comparison_counts = {}
-
     # === IMAGE UPLOAD SECTION === #
     st.sidebar.header("Upload Writing Samples")
     uploaded_files = st.sidebar.file_uploader(
@@ -325,6 +314,9 @@ if st.session_state.logged_in:
         accept_multiple_files=True,
         key=year_group
     )
+
+    # ✅ Initialize the session list to store image + label
+    st.session_state.setdefault("samples_with_labels", [])
 
     if uploaded_files:
         with st.sidebar.form("upload_form"):
@@ -369,6 +361,13 @@ if st.session_state.logged_in:
                     })
 
                     uploaded_image_urls.append(image_url)
+
+                    # ✅ Store image + teacher label in session
+                    st.session_state["samples_with_labels"].append({
+                        "image_url": image_url,
+                        "grade_label": grade_label
+                    })
+
                     st.sidebar.success(f"{uploaded_file.name} uploaded as {grade_label}")
 
                 except Exception as e:
@@ -376,10 +375,10 @@ if st.session_state.logged_in:
 
             batch.commit()
 
-            # ✅ Add new URLs to session state
             for url in uploaded_image_urls:
                 if url not in st.session_state.image_urls:
                     st.session_state.image_urls.append(url)
+
                     
     # === RANKINGS PAGE BUTTON === #
     if st.sidebar.button("📊 View Rankings"):
