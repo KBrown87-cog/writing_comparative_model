@@ -281,6 +281,15 @@ if not st.session_state.get("logged_in", False):
     """
     st.markdown(page_bg_img, unsafe_allow_html=True)
 
+    hide_nav_tabs = """
+    <style>
+    /* Hide Streamlit's multipage navigation */
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+    </style>
+    """
+    st.markdown(hide_nav_tabs, unsafe_allow_html=True)
 
 
     # === Login form in sidebar === #
