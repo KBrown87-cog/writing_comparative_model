@@ -144,9 +144,15 @@ def calculate_rankings(comparisons):
 
 def save_rankings_to_firestore(rankings, school_name, year_group):
     """Saves the normalized ranking scores into Firestore under the 'rankings' collection."""
-    db = st.session_state["firestore_client"]  # ✅ ADD THIS
+    db = st.session_state["firestore_client"]
 
     try:
+        # ✅ Build a lookup for image_url → teacher grade
+        label_lookup = {
+            sample["image_url"]: sample.get("grade_label", "Not Provided")
+            for sample in st.session_state.get("samples_with_labels", [])
+        }
+
         for image_url, score in rankings.items():
             doc_id = hashlib.sha256(image_url.encode()).hexdigest()
             doc_ref = db.collection("rankings").document(doc_id)
@@ -157,6 +163,7 @@ def save_rankings_to_firestore(rankings, school_name, year_group):
                 "image_url": image_url,
                 "score": score,
                 "comparison_count": st.session_state.comparison_counts.get(image_url, 0),
+                "grade_label": label_lookup.get(image_url, "Not Provided"),  # ✅ Add teacher judgement
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
 
