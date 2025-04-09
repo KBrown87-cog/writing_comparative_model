@@ -268,6 +268,7 @@ if not st.session_state.get("logged_in", False):
     </style>
     """
     st.markdown(page_bg_img, unsafe_allow_html=True)
+    st.image("https://i.imgur.com/FOuu4dM.jpg", caption="✅ Background image loads", use_column_width=True)
 
 
 
