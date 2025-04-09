@@ -306,13 +306,33 @@ else:
 if st.session_state.logged_in:
     school_name = st.session_state.school_name
 
+    # === YEAR GROUP SELECTION === #
+    st.sidebar.header("Select Year Group")
+
+    # Set a default in session state
+    st.session_state.setdefault("year_group", "Year 1")
+
+    # Render the selectbox using the current session value
+    selected_year = st.sidebar.selectbox(
+        "Select Year Group",
+        ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"],
+        index=["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Year 6"].index(st.session_state["year_group"])
+    )
+
+    # Update if changed
+    if selected_year != st.session_state["year_group"]:
+        st.session_state["year_group"] = selected_year
+        st.session_state.image_urls = []
+        st.session_state.image_comparison_counts = {}
+        st.rerun()
+
     # === IMAGE UPLOAD SECTION === #
     st.sidebar.header("Upload Writing Samples")
     uploaded_files = st.sidebar.file_uploader(
         "Upload Writing Samples",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key=st.session_state.get("year_group", "Year 1")
+        key=st.session_state["year_group"]  # ✅ Always safe
     )
 
     # ✅ Initialize the session list to store image + label
