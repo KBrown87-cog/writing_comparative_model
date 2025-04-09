@@ -133,6 +133,14 @@ if ranked_images:
     df["Comparison Count"] = df["comparison_count"].fillna(0)
     df["Standard"] = df["Standard"]
 
+    # ✅ CSV Download Button in Sidebar
+    st.sidebar.download_button(
+        label="📥 Download Rankings as CSV",
+        data=df.to_csv(index=False).encode("utf-8"),
+        file_name="writing_rankings.csv",
+        mime="text/csv"
+    )
+
     # ✅ Render the table
     st.markdown(
         df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Standard"]]
