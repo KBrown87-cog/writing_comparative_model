@@ -30,7 +30,7 @@ st.markdown("""
     text-align: center;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
 '>
-Horizon School Dubai Comparative Judgement Tool
+Horizon Comparative Judgement Tool for Writing
 </h1>
 """, unsafe_allow_html=True)
 
