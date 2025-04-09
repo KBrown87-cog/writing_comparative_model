@@ -86,23 +86,21 @@ if ranked_images:
             lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS")
         )
 
-    st.subheader("📋 Ranking Table")
-    st.data_editor(
-        df.rename(columns={
-            "image_url": "Writing Sample",
-            "score": "Score",
-            "comparison_count": "Comparison Count"
-        }),
-        hide_index=True,
-        column_config={"Standard": {"width": 100}}
+    st.subheader("🖼️ Visual Ranking Table")
+
+    # Rebuild the DataFrame to include thumbnails
+    df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="120">')
+    df["Score"] = df["score"]
+    df["Comparison Count"] = df["comparison_count"]
+    df["Standard"] = df["Standard"]
+
+    # Render the table with HTML so the images show as thumbnails
+    st.markdown(
+        df[["Writing Sample", "Score", "Comparison Count", "Standard"]]
+        .to_html(escape=False, index=False),
+        unsafe_allow_html=True
     )
 
-    st.sidebar.download_button(
-        "📥 Download Rankings as CSV",
-        df.to_csv(index=False).encode("utf-8"),
-        "writing_rankings.csv",
-        "text/csv"
-    )
 
     st.subheader("🏆 Top-Ranked Writing Samples")
 
