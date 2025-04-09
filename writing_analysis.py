@@ -254,16 +254,21 @@ if not st.session_state.get("logged_in", False):
     # === Set background image === #
     page_bg_img = """
     <style>
-    body {
-        background-image: url('https://i.imgur.com/FOuu4dM.jpg');
+    [data-testid="stAppViewContainer"] > .main {
+        background-image: url("https://i.imgur.com/FOuu4dM.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
+        min-height: 100vh;
+    }
+    [data-testid="stSidebar"] {
+        background-color: rgba(255, 255, 255, 0.9);
     }
     </style>
     """
     st.markdown(page_bg_img, unsafe_allow_html=True)
+
 
 
     # === Login form in sidebar === #
