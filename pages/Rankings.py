@@ -141,9 +141,10 @@ if ranked_images:
         mime="text/csv"
     )
 
+
     # ✅ Render the table
     st.markdown(
-        df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Standard"]]
+        df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Comparative Judgement"]]
         .to_html(escape=False, index=False),
         unsafe_allow_html=True
     )
