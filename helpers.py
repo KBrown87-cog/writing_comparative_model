@@ -147,10 +147,17 @@ def save_rankings_to_firestore(rankings, school_name, year_group):
     db = st.session_state["firestore_client"]
 
     try:
-        # ✅ Build a lookup for image_url → teacher grade
+        # ✅ Fetch grade labels from Firestore instead of relying on session state
+        docs = (
+            db.collection("writing_samples")
+              .where(filter=FieldFilter("school", "==", school_name))
+              .where(filter=FieldFilter("year_group", "==", year_group))
+              .stream()
+        )
+
         label_lookup = {
-            sample["image_url"]: sample.get("grade_label", "Not Provided")
-            for sample in st.session_state.get("samples_with_labels", [])
+            doc.to_dict()["image_url"]: doc.to_dict().get("grade_label", "Not Provided")
+            for doc in docs if "image_url" in doc.to_dict()
         }
 
         for image_url, score in rankings.items():
@@ -163,7 +170,7 @@ def save_rankings_to_firestore(rankings, school_name, year_group):
                 "image_url": image_url,
                 "score": score,
                 "comparison_count": st.session_state.comparison_counts.get(image_url, 0),
-                "grade_label": label_lookup.get(image_url, "Not Provided"),  # ✅ Add teacher judgement
+                "grade_label": label_lookup.get(image_url, "Not Provided"),  # ✅ Reliable source now
                 "timestamp": firestore.SERVER_TIMESTAMP
             })
 
