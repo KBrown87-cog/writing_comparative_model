@@ -87,7 +87,7 @@ if ranked_images:
     # If scores are missing, skip categorization
     if df["score"].empty:
         st.warning("⚠️ Not enough rankings to categorize writing samples.")
-        df["Standard"] = "Unranked"
+        df["Comparative Judgement"] = "Unranked"
     else:
         # Set cutoffs
         if len(df) < 10:
@@ -98,21 +98,18 @@ if ranked_images:
             wts_cutoff = np.percentile(df["score"], 25)
             gds_cutoff = np.percentile(df["score"], 75)
 
-        # Assign standard levels
-        df["Standard"] = df["score"].apply(
+        # Assign comparative judgement levels
+        df["Comparative Judgement"] = df["score"].apply(
             lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS")
         )
 
-    # 🖼️ Thumbnail Table
-    st.subheader("🖼️ Visual Ranking Table")
-
-    # Convert ranked_images to DataFrame
+    # Convert ranked_images to DataFrame again just in case
     df = pd.DataFrame(ranked_images).dropna(subset=["score"])
 
-    # Compute band if needed
+    # Repeat the banding logic again here
     if df["score"].empty:
         st.warning("⚠️ Not enough rankings to categorize writing samples.")
-        df["Standard"] = "Unranked"
+        df["Comparative Judgement"] = "Unranked"
     else:
         if len(df) < 10:
             min_score, max_score = df["score"].min(), df["score"].max()
@@ -122,31 +119,6 @@ if ranked_images:
             wts_cutoff = np.percentile(df["score"], 25)
             gds_cutoff = np.percentile(df["score"], 75)
 
-        df["Standard"] = df["score"].apply(
+        df["Comparative Judgement"] = df["score"].apply(
             lambda x: "GDS" if x >= gds_cutoff else ("WTS" if x <= wts_cutoff else "EXS")
         )
-
-    # ✅ Safely create and rename columns
-    df["Writing Sample"] = df["image_url"].apply(lambda url: f'<img src="{url}" width="480">')
-    df["Teacher Judgement"] = df["grade_label"].fillna("Not Provided")
-    df["Score"] = df["score"]
-    df["Comparison Count"] = df["comparison_count"].fillna(0)
-    df["Standard"] = df["Standard"]
-
-    # ✅ CSV Download Button in Sidebar
-    st.sidebar.download_button(
-        label="📥 Download Rankings as CSV",
-        data=df.to_csv(index=False).encode("utf-8"),
-        file_name="writing_rankings.csv",
-        mime="text/csv"
-    )
-
-
-    # ✅ Render the table
-    st.markdown(
-        df[["Writing Sample", "Score", "Comparison Count", "Teacher Judgement", "Comparative Judgement"]]
-        .to_html(escape=False, index=False),
-        unsafe_allow_html=True
-    )
-
-    
